@@ -1,0 +1,29 @@
+{
+  "name": "MADVERSE",
+  "short_name": "MADVERSE",
+  "description": "AI-Powered Personal Knowledge OS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/app-icon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Page",
+      "short_name": "New",
+      "description": "Create a new page",
+      "url": "/workspace?new=true",
+      "icons": [{ "src": "/app-icon.png", "sizes": "any", "type": "image/png" }]
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "screenshots": []
+}

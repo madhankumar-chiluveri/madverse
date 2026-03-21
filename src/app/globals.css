@@ -1,0 +1,168 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS Custom Properties ───────────────────────────────────────────────── */
+@layer base {
+  :root {
+    --font-roboto-serif: "Roboto Serif", serif;
+    --font-inter: "Inter";
+    --background: 0 0% 100%;
+    --foreground: 0 0% 5%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 5%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 5%;
+    --primary: 0 0% 0%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 5%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 5%;
+    --destructive: 0 0% 30%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 0 0% 0%;
+    --radius: 0.5rem;
+    --sidebar: 0 0% 98%;
+  }
+
+  .dark {
+    --background: 0 0% 5%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 5%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 95%;
+    --destructive: 0 0% 40%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 0 0% 100%;
+    --sidebar: 0 0% 10%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+  }
+}
+
+/* ── Maddy gradient (grayscale) ───────────────────────────────────────────── */
+.maddy-gradient-bg {
+  background: linear-gradient(135deg, hsl(0 0% 0%) 0%, hsl(0 0% 20%) 50%, hsl(0 0% 10%) 100%);
+}
+
+.maddy-gradient-text {
+  background: linear-gradient(135deg, hsl(0 0% 0%) 0%, hsl(0 0% 20%) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────── */
+.bg-sidebar {
+  background-color: hsl(var(--sidebar));
+}
+
+/* ── BlockNote editor overrides ───────────────────────────────────────────── */
+.blocknote-wrapper .bn-editor {
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+.blocknote-wrapper .bn-editor-content {
+  min-height: 300px;
+}
+
+.blocknote-wrapper .ProseMirror {
+  outline: none;
+  font-size: 16px;
+  line-height: 1.75;
+  color: hsl(var(--foreground));
+}
+
+.blocknote-wrapper .ProseMirror p.is-empty::before {
+  content: attr(data-placeholder);
+  color: hsl(var(--muted-foreground) / 0.4);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
+/* Dark mode BlockNote */
+.dark .blocknote-wrapper {
+  color: hsl(var(--foreground));
+}
+
+/* ── Prose / typography ───────────────────────────────────────────────────── */
+.prose-editor {
+  @apply text-foreground;
+}
+
+/* ── Accent colours (grayscale) ───────────────────────────────────────────── */
+[data-accent="grayscale"] {
+  --primary: 0 0% 0%;
+  --ring: 0 0% 0%;
+}
+
+/* ── Animations ───────────────────────────────────────────────────────────── */
+@keyframes slide-in-from-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-in {
+  animation: slide-in-from-right 0.2s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out;
+}
+
+/* ── PWA safe areas ───────────────────────────────────────────────────────── */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

@@ -1,0 +1,479 @@
+import { v } from "convex/values";
+import { action, internalMutation, query } from "./_generated/server";
+import { internal, api } from "./_generated/api";
+import { getAuthUserId } from "@convex-dev/auth/server";
+
+// ---- Auto-tag page with Maddy ----
+export const tagPage = action({
+  args: {
+    pageId: v.id("pages"),
+    geminiApiKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const page = await ctx.runQuery(internal.maddy.getPageForMaddy, { pageId: args.pageId });
+    if (!page) throw new Error("Page not found");
+
+    const prompt = `You are Maddy, an AI knowledge organiser. Given the following note/page content, generate 3-7 relevant tags that categorise this content. Return ONLY a JSON array of tag strings, no explanation.
+
+Title: ${page.title}
+Content: ${page.contentPreview}
+
+Return format: ["tag1", "tag2", "tag3"]`;
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${args.geminiApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.3,
+              maxOutputTokens: 200,
+            },
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error(`Gemini API error: ${response.status}`);
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+
+      // Extract JSON array from response
+      const match = text.match(/\[[\s\S]*\]/);
+      const tags: string[] = match ? JSON.parse(match[0]) : [];
+
+      await ctx.runMutation(internal.maddy.updatePageTags, {
+        pageId: args.pageId,
+        tags: tags.slice(0, 8),
+      });
+
+      return { tags };
+    } catch (err) {
+      console.error("Maddy tagging error:", err);
+      return { tags: [] };
+    }
+  },
+});
+
+// ---- Summarise page ----
+export const summarisePage = action({
+  args: {
+    pageId: v.id("pages"),
+    geminiApiKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const page = await ctx.runQuery(internal.maddy.getPageForMaddy, { pageId: args.pageId });
+    if (!page) throw new Error("Page not found");
+
+    const prompt = `Summarise the following content in 3-5 concise bullet points. Be direct and capture the key insights.
+
+Title: ${page.title}
+Content: ${page.contentPreview}
+
+Return bullet points starting with •`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${args.geminiApiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 400 },
+        }),
+      }
+    );
+
+    if (!response.ok) throw new Error(`Gemini API error: ${response.status}`);
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  },
+});
+
+// ---- Extract tasks from page ----
+export const extractTasks = action({
+  args: {
+    pageId: v.id("pages"),
+    geminiApiKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const page = await ctx.runQuery(internal.maddy.getPageForMaddy, { pageId: args.pageId });
+    if (!page) throw new Error("Page not found");
+
+    const prompt = `Extract all actionable tasks and to-dos from the following content. Return a JSON array of task strings.
+
+Title: ${page.title}
+Content: ${page.contentPreview}
+
+Return format: ["task 1", "task 2", "task 3"]`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${args.geminiApiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 500 },
+        }),
+      }
+    );
+
+    if (!response.ok) throw new Error(`Gemini API error: ${response.status}`);
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+    const match = text.match(/\[[\s\S]*\]/);
+    return match ? JSON.parse(match[0]) : [];
+  },
+});
+
+// ---- Inline command: rewrite/explain/continue ----
+export const inlineCommand = action({
+  args: {
+    command: v.union(
+      v.literal("explain"),
+      v.literal("rewrite"),
+      v.literal("continue"),
+      v.literal("brainstorm"),
+      v.literal("translate")
+    ),
+    text: v.string(),
+    context: v.optional(v.string()),
+    targetLanguage: v.optional(v.string()),
+    geminiApiKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    let prompt = "";
+    switch (args.command) {
+      case "explain":
+        prompt = `Explain the following text in simple, clear language:\n\n${args.text}`;
+        break;
+      case "rewrite":
+        prompt = `Rewrite the following text to be clearer and more concise, preserving the original meaning:\n\n${args.text}`;
+        break;
+      case "continue":
+        prompt = `Continue writing from this text naturally (1-3 sentences):\n\n${args.text}`;
+        break;
+      case "brainstorm":
+        prompt = `Generate 10 creative ideas related to:\n\n${args.text}\n\nReturn as a numbered list.`;
+        break;
+      case "translate":
+        prompt = `Translate the following text to ${args.targetLanguage ?? "Spanish"}:\n\n${args.text}`;
+        break;
+    }
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${args.geminiApiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 1000 },
+        }),
+      }
+    );
+
+    if (!response.ok) throw new Error(`Gemini API error: ${response.status}`);
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  },
+});
+
+// ---- Generate embedding for semantic search ----
+export const generateEmbedding = action({
+  args: {
+    pageId: v.id("pages"),
+    geminiApiKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const page = await ctx.runQuery(internal.maddy.getPageForMaddy, { pageId: args.pageId });
+    if (!page) return;
+
+    const textToEmbed = `${page.title}\n${page.contentPreview}`.slice(0, 2000);
+    const contentHash = await hashString(textToEmbed);
+
+    // Check if already embedded with same content
+    const existing = await ctx.runQuery(internal.maddy.getEmbedding, { pageId: args.pageId });
+    if (existing?.contentHash === contentHash) return;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${args.geminiApiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "models/text-embedding-004",
+          content: { parts: [{ text: textToEmbed }] },
+        }),
+      }
+    );
+
+    if (!response.ok) throw new Error(`Gemini Embedding API error: ${response.status}`);
+    const data = await response.json();
+    const vector: number[] = data.embedding?.values ?? [];
+
+    if (vector.length > 0) {
+      await ctx.runMutation(internal.maddy.upsertEmbedding, {
+        pageId: args.pageId,
+        vector,
+        contentHash,
+      });
+    }
+  },
+});
+
+// ---- Semantic search ----
+export const semanticSearch = action({
+  args: {
+    query: v.string(),
+    workspaceId: v.id("workspaces"),
+    geminiApiKey: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    if (!args.query.trim()) return [];
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${args.geminiApiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "models/text-embedding-004",
+          content: { parts: [{ text: args.query }] },
+        }),
+      }
+    );
+
+    if (!response.ok) return [];
+    const data = await response.json();
+    const queryVector: number[] = data.embedding?.values ?? [];
+
+    if (queryVector.length === 0) return [];
+
+    const results = await ctx.vectorSearch("maddyEmbeddings", "by_vector", {
+      vector: queryVector,
+      limit: args.limit ?? 10,
+    });
+
+    const pageIds = results.map((r) => r._id);
+    const pages = await ctx.runQuery(internal.maddy.getPagesByEmbeddingIds, {
+      embeddingIds: pageIds,
+      workspaceId: args.workspaceId,
+    });
+
+    return pages;
+  },
+});
+
+// ---- Related pages (Maddy Suggests) ----
+export const getRelatedPages = action({
+  args: {
+    pageId: v.id("pages"),
+    workspaceId: v.id("workspaces"),
+    geminiApiKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const page = await ctx.runQuery(internal.maddy.getPageForMaddy, { pageId: args.pageId });
+    if (!page) return [];
+
+    const existing = await ctx.runQuery(internal.maddy.getEmbedding, { pageId: args.pageId });
+    if (!existing || existing.vector.length === 0) return [];
+
+    const results = await ctx.vectorSearch("maddyEmbeddings", "by_vector", {
+      vector: existing.vector,
+      limit: 8,
+    });
+
+    // Exclude the current page
+    const filteredIds = results
+      .filter((r) => r._id !== existing._id)
+      .slice(0, 5)
+      .map((r) => r._id);
+
+    const pages = await ctx.runQuery(internal.maddy.getPagesByEmbeddingIds, {
+      embeddingIds: filteredIds,
+      workspaceId: args.workspaceId,
+    });
+
+    return pages;
+  },
+});
+
+// ---- Internal helpers ----
+export const getPageForMaddy = query({
+  args: { pageId: v.id("pages") },
+  handler: async (ctx, args) => {
+    const page = await ctx.db.get(args.pageId);
+    if (!page) return null;
+
+    const blocks = await ctx.db
+      .query("blocks")
+      .withIndex("by_pageId", (q) => q.eq("pageId", args.pageId))
+      .order("asc")
+      .take(20);
+
+    const textContent = blocks
+      .map((b) => {
+        try {
+          if (typeof b.content === "string") return b.content;
+          if (b.content?.content) {
+            return extractText(b.content);
+          }
+          return "";
+        } catch {
+          return "";
+        }
+      })
+      .join(" ")
+      .slice(0, 1000);
+
+    return {
+      title: page.title,
+      contentPreview: textContent,
+    };
+  },
+});
+
+function extractText(node: any): string {
+  if (!node) return "";
+  if (typeof node === "string") return node;
+  if (node.text) return node.text;
+  if (Array.isArray(node)) return node.map(extractText).join(" ");
+  if (node.content) return extractText(node.content);
+  return "";
+}
+
+export const updatePageTags = internalMutation({
+  args: {
+    pageId: v.id("pages"),
+    tags: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.pageId, { maddyTags: args.tags, updatedAt: Date.now() });
+  },
+});
+
+export const upsertEmbedding = internalMutation({
+  args: {
+    pageId: v.id("pages"),
+    vector: v.array(v.float64()),
+    contentHash: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("maddyEmbeddings")
+      .withIndex("by_pageId", (q) => q.eq("pageId", args.pageId))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        vector: args.vector,
+        contentHash: args.contentHash,
+        updatedAt: Date.now(),
+      });
+    } else {
+      await ctx.db.insert("maddyEmbeddings", {
+        pageId: args.pageId,
+        vector: args.vector,
+        contentHash: args.contentHash,
+        updatedAt: Date.now(),
+      });
+    }
+  },
+});
+
+export const getEmbedding = query({
+  args: { pageId: v.id("pages") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("maddyEmbeddings")
+      .withIndex("by_pageId", (q) => q.eq("pageId", args.pageId))
+      .first();
+  },
+});
+
+export const getPagesByEmbeddingIds = query({
+  args: {
+    embeddingIds: v.array(v.id("maddyEmbeddings")),
+    workspaceId: v.id("workspaces"),
+  },
+  handler: async (ctx, args) => {
+    const results = [];
+    for (const embId of args.embeddingIds) {
+      const emb = await ctx.db.get(embId);
+      if (!emb) continue;
+      const page = await ctx.db.get(emb.pageId);
+      if (page && page.workspaceId === args.workspaceId && !page.isArchived) {
+        results.push(page);
+      }
+    }
+    return results;
+  },
+});
+
+async function hashString(str: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// ---- Organise Workspace ----
+export const organiseWorkspace = action({
+  args: {
+    pageList: v.array(v.object({
+      id: v.id("pages"),
+      title: v.string(),
+      tags: v.array(v.string()),
+      parentId: v.optional(v.union(v.id("pages"), v.null())),
+    })),
+    geminiApiKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (args.pageList.length === 0) return [];
+
+    const pageListText = args.pageList
+      .slice(0, 40)
+      .map((p) => `- "${p.title}" (id: ${p.id}, tags: ${p.tags.join(", ") || "none"})`)
+      .join("\n");
+
+    const prompt = `You are Maddy, an AI knowledge organiser. Analyse these notes and suggest reorganisations.
+
+Pages:
+${pageListText}
+
+Return a JSON array of suggestions. Format:
+[{"type": "move", "pageId": "<id>", "pageTitle": "<title>", "description": "<action>", "reason": "<why>"}]
+
+Return [] if the structure looks fine. Return ONLY a valid JSON array.`;
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${args.geminiApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.3, maxOutputTokens: 1500 },
+          }),
+        }
+      );
+      if (!response.ok) return [];
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+      const match = text.match(/\[[\s\S]*\]/);
+      if (!match) return [];
+      const suggestions = JSON.parse(match[0]);
+      return Array.isArray(suggestions) ? suggestions : [];
+    } catch {
+      return [];
+    }
+  },
+});
