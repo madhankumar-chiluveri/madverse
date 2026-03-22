@@ -25,7 +25,7 @@ export const API_CONFIG = {
 
 export const ROUTES = {
   LOGIN: "/login",
-  WORKSPACE: "/workspace",
+  WORKSPACE: "/workspace/brain",
   PAGE: (id: string) => `/workspace/${id}`,
   SETTINGS: "/workspace/settings",
   TRASH: "/workspace/trash",

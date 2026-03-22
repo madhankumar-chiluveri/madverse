@@ -3,11 +3,11 @@ import { api } from "./_generated/api";
 
 const crons = cronJobs();
 
-// Fetch and process tech news every 3 hours
+// Fetch and process FEED stories every 3 hours
 crons.interval(
-  "sync-latest-news",
+  "sync-latest-feed",
   { hours: 3 },
-  api.newsSync.fetchAndProcessNews,
+  api.feedSync.fetchAndProcessFeed,
 );
 
 export default crons;

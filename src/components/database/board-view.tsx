@@ -1,38 +1,46 @@
 "use client";
 
-import { useMemo } from "react";
-import { useMutation } from "convex/react";
 import { Plus } from "lucide-react";
 
-import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import { ReminderTriggerButton } from "@/components/reminders/reminder-trigger-button";
 import { cn } from "@/lib/utils";
+import type { PropertySchema } from "@/types/database";
 import {
+  buildInitialRowData,
   doesPropertyValueMatchOption,
-  getDefaultValueForProperty,
   getSelectColorClasses,
-  normalizeProperties,
   normalizeValueForProperty,
 } from "./database-utils";
 import { PropertyCell } from "./property-cell";
 
 interface BoardViewProps {
-  database: any;
+  workspaceId: Id<"workspaces">;
   pageId: Id<"pages">;
+  databaseId: Id<"databases">;
+  databaseName: string;
+  properties: PropertySchema[];
   rows: any[] | undefined;
   groupByPropertyId?: string | null;
+  now?: number;
+  onAddRow: (initialData?: Record<string, unknown>) => Promise<void>;
+  onUpdateRow: (rowId: Id<"rows">, data: Record<string, unknown>) => Promise<void>;
 }
 
-export function BoardView({ database, rows, groupByPropertyId }: BoardViewProps) {
-  const addRow = useMutation(api.databases.addRow);
-  const updateRow = useMutation(api.databases.updateRow);
-
-  const properties = normalizeProperties(database.properties ?? []);
-  const selectProperties = useMemo(
-    () => properties.filter((property) => property.type === "select"),
-    [properties]
-  );
+export function BoardView({
+  workspaceId,
+  pageId,
+  databaseId,
+  databaseName,
+  properties,
+  rows,
+  groupByPropertyId,
+  now,
+  onAddRow,
+  onUpdateRow,
+}: BoardViewProps) {
+  const selectProperties = properties.filter((property) => property.type === "select");
   const groupProperty =
     selectProperties.find((property) => property.id === groupByPropertyId) ?? selectProperties[0];
   const titleProperty = properties.find((property) => property.type === "title");
@@ -48,18 +56,12 @@ export function BoardView({ database, rows, groupByPropertyId }: BoardViewProps)
   const columns = groupProperty.config?.options ?? [];
   const matchesAnyColumn = (value: unknown) =>
     columns.some((column) => doesPropertyValueMatchOption(groupProperty, value, column.id));
-
   const noGroupRows = rows?.filter((row: any) => !matchesAnyColumn(row.data?.[groupProperty.id]));
 
   const handleAddCard = async (columnId: string) => {
-    const initialData: Record<string, unknown> = {};
-    for (const property of properties) {
-      initialData[property.id] = getDefaultValueForProperty(property);
-    }
-
+    const initialData = buildInitialRowData(properties);
     initialData[groupProperty.id] = columnId;
-
-    await addRow({ databaseId: database._id, data: initialData });
+    await onAddRow(initialData);
   };
 
   const renderCard = (row: any) => {
@@ -73,7 +75,22 @@ export function BoardView({ database, rows, groupByPropertyId }: BoardViewProps)
         key={row._id}
         className="rounded-[20px] border border-white/8 bg-[#161513] p-3 shadow-[0_12px_30px_rgba(0,0,0,0.24)] transition hover:border-white/12 hover:bg-[#1a1917]"
       >
-        <p className="mb-3 text-sm font-medium text-zinc-100">{title || "Untitled"}</p>
+        <div className="mb-3 flex items-center gap-2">
+          <p className="min-w-0 flex-1 text-sm font-medium text-zinc-100">{title || "Untitled"}</p>
+          <ReminderTriggerButton
+            workspaceId={workspaceId}
+            iconOnly
+            title="Create reminder from card"
+            initialValues={{
+              title: `Follow up: ${String(title || "Untitled row")}`,
+              pageId,
+              databaseId,
+              rowId: row._id,
+              sourceLabel: `${databaseName} / ${String(title || "Untitled row")}`,
+              sourceUrl: `/workspace/${pageId}`,
+            }}
+          />
+        </div>
 
         <div className="space-y-2">
           {visibleProperties.slice(0, 4).map((property) => (
@@ -85,13 +102,13 @@ export function BoardView({ database, rows, groupByPropertyId }: BoardViewProps)
                 property={property}
                 value={row.data?.[property.id]}
                 rowCreatedAt={row._creationTime}
+                rowData={row.data}
+                allProperties={properties}
+                now={now}
                 onChange={(nextValue) =>
-                  updateRow({
-                    id: row._id,
-                    data: {
-                      ...row.data,
-                      [property.id]: normalizeValueForProperty(property, nextValue),
-                    },
+                  onUpdateRow(row._id, {
+                    ...row.data,
+                    [property.id]: normalizeValueForProperty(property, nextValue),
                   })
                 }
               />

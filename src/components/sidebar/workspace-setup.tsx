@@ -25,7 +25,7 @@ export function WorkspaceSetup() {
       const id = await createWorkspace({ name: name.trim() });
       setCurrentWorkspaceId(id);
       toast.success("Workspace created!");
-      router.push("/workspace");
+      router.push("/workspace/brain");
     } catch (err: any) {
       toast.error(err.message ?? "Failed to create workspace");
     } finally {
@@ -35,10 +35,10 @@ export function WorkspaceSetup() {
 
   return (
     <div className="w-60 shrink-0 h-full border-r bg-sidebar flex flex-col items-center justify-center p-6">
-      <img src="/app-icon.png" alt="MADVERSE" className="w-12 h-12 rounded-2xl mb-4" />
+      <img src="/app-icon.svg" alt="MADVERSE" className="w-12 h-12 rounded-2xl mb-4" />
       <h2 className="text-base font-semibold mb-1">Create your workspace</h2>
       <p className="text-xs text-muted-foreground text-center mb-6">
-        Give your knowledge OS a name
+        Give your BRAIN a name
       </p>
       <form onSubmit={handleCreate} className="w-full space-y-3">
         <div className="space-y-1">

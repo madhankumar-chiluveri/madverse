@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Plus,
   Settings2,
+  Sigma,
   Trash2,
   WrapText,
 } from "lucide-react";
@@ -32,11 +33,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import type { PropertySchema, PropertyType, SelectOption } from "@/types/database";
+import type { FormulaConfig, PropertySchema, PropertyType, SelectOption } from "@/types/database";
 import {
   PROPERTY_TYPE_META,
   SELECT_OPTION_COLORS,
+  getFormulaConfig,
   getPropertyIcon,
   getSelectColorClasses,
   getSelectColorDotClass,
@@ -54,6 +64,7 @@ interface PropertyHeaderMenuProps {
   onToggleFreeze: (enabled: boolean) => void;
   onToggleShowPageIcon: (enabled: boolean) => void;
   onSaveOptions: (options: SelectOption[]) => void;
+  onSaveFormula: (formula: FormulaConfig) => void;
 }
 
 export function PropertyHeaderMenu({
@@ -67,9 +78,11 @@ export function PropertyHeaderMenu({
   onToggleFreeze,
   onToggleShowPageIcon,
   onSaveOptions,
+  onSaveFormula,
 }: PropertyHeaderMenuProps) {
   const [open, setOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [formulaOpen, setFormulaOpen] = useState(false);
   const [name, setName] = useState(property.name);
 
   useEffect(() => {
@@ -77,6 +90,7 @@ export function PropertyHeaderMenu({
   }, [property.name]);
 
   const currentOptions = property.config?.options ?? [];
+  const currentFormula = getFormulaConfig(property);
 
   const commitName = () => {
     const trimmed = name.trim();
@@ -177,6 +191,19 @@ export function PropertyHeaderMenu({
             </DropdownMenuItem>
           )}
 
+          {property.type === "formula" && (
+            <DropdownMenuItem
+              className="focus:bg-white/[0.06]"
+              onSelect={() => {
+                setFormulaOpen(true);
+                setOpen(false);
+              }}
+            >
+              <Sigma className="h-4 w-4 text-zinc-400" />
+              Edit formula
+            </DropdownMenuItem>
+          )}
+
           {property.type === "title" && (
             <DropdownMenuCheckboxItem
               checked={Boolean(property.config?.showPageIcon)}
@@ -235,6 +262,14 @@ export function PropertyHeaderMenu({
         options={currentOptions}
         onOpenChange={setOptionsOpen}
         onSave={onSaveOptions}
+      />
+
+      <PropertyFormulaDialog
+        propertyName={property.name}
+        open={formulaOpen}
+        formula={currentFormula}
+        onOpenChange={setFormulaOpen}
+        onSave={onSaveFormula}
       />
     </>
   );
@@ -380,6 +415,215 @@ function PropertyOptionsDialog({
             onClick={handleSave}
           >
             Save changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface PropertyFormulaDialogProps {
+  propertyName: string;
+  open: boolean;
+  formula: FormulaConfig;
+  onOpenChange: (open: boolean) => void;
+  onSave: (formula: FormulaConfig) => void;
+}
+
+const FORMULA_PRESETS: Array<{
+  label: string;
+  description: string;
+  formula: FormulaConfig;
+}> = [
+  {
+    label: "Renews in",
+    description: 'Shows a live countdown and flips to Active when the date is due.',
+    formula: {
+      expression: 'RENEWS_IN(PROP("Renewal Date"))',
+      resultType: "text",
+      displayStyle: "auto",
+    },
+  },
+  {
+    label: "Status from date",
+    description: "Turns a date-driven field into a colored status cell.",
+    formula: {
+      expression: 'IF(DAYS_UNTIL(PROP("Renewal Date")) <= 0, "Active", "Pending")',
+      resultType: "text",
+      displayStyle: "badge",
+    },
+  },
+  {
+    label: "Numeric total",
+    description: "Multiplies two numeric properties like a spreadsheet.",
+    formula: {
+      expression: 'NUMBER(PROP("Seats")) * NUMBER(PROP("Price"))',
+      resultType: "number",
+      displayStyle: "plain",
+    },
+  },
+];
+
+function PropertyFormulaDialog({
+  propertyName,
+  open,
+  formula,
+  onOpenChange,
+  onSave,
+}: PropertyFormulaDialogProps) {
+  const [draftFormula, setDraftFormula] = useState<FormulaConfig>(formula);
+
+  useEffect(() => {
+    setDraftFormula(formula);
+  }, [formula, open]);
+
+  const handleSave = () => {
+    onSave({
+      expression: draftFormula.expression?.trim() ?? "",
+      resultType: draftFormula.resultType ?? "text",
+      displayStyle: draftFormula.displayStyle ?? "auto",
+    });
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        title="Edit formula"
+        className="max-w-3xl border-white/10 bg-[#141311] text-zinc-100 sm:rounded-2xl"
+      >
+        <DialogHeader>
+          <DialogTitle className="text-zinc-100">Configure formula</DialogTitle>
+          <DialogDescription className="text-zinc-400">
+            Build a computed field for {propertyName || "this property"} using other columns.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+              Expression
+            </div>
+            <Textarea
+              value={draftFormula.expression ?? ""}
+              onChange={(event) =>
+                setDraftFormula((current) => ({
+                  ...current,
+                  expression: event.target.value,
+                }))
+              }
+              placeholder='Example: RENEWS_IN(PROP("Claude Renewal"))'
+              className="min-h-[132px] border-white/10 bg-[#181715] text-sm text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-white/15"
+            />
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-2">
+              <div className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+                Result type
+              </div>
+              <Select
+                value={draftFormula.resultType ?? "text"}
+                onValueChange={(value) =>
+                  setDraftFormula((current) => ({
+                    ...current,
+                    resultType: value as FormulaConfig["resultType"],
+                  }))
+                }
+              >
+                <SelectTrigger className="h-10 border-white/10 bg-[#181715] text-zinc-100 focus:ring-white/15">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="border-white/10 bg-[#191816] text-zinc-100">
+                  <SelectItem value="text">Text</SelectItem>
+                  <SelectItem value="number">Number</SelectItem>
+                  <SelectItem value="date">Date</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+                Display
+              </div>
+              <Select
+                value={draftFormula.displayStyle ?? "auto"}
+                onValueChange={(value) =>
+                  setDraftFormula((current) => ({
+                    ...current,
+                    displayStyle: value as FormulaConfig["displayStyle"],
+                  }))
+                }
+              >
+                <SelectTrigger className="h-10 border-white/10 bg-[#181715] text-zinc-100 focus:ring-white/15">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="border-white/10 bg-[#191816] text-zinc-100">
+                  <SelectItem value="auto">Auto badge</SelectItem>
+                  <SelectItem value="plain">Plain text</SelectItem>
+                  <SelectItem value="badge">Always badge</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+              Quick templates
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              {FORMULA_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => setDraftFormula(preset.formula)}
+                  className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left transition hover:bg-white/[0.05]"
+                >
+                  <div className="text-sm font-medium text-zinc-100">{preset.label}</div>
+                  <div className="mt-1 text-xs leading-5 text-zinc-400">{preset.description}</div>
+                  <code className="mt-3 block rounded-xl bg-black/20 px-2.5 py-2 text-[11px] text-zinc-300">
+                    {preset.formula.expression}
+                  </code>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-300">
+            <div className="font-medium text-zinc-100">Supported helpers</div>
+            <div className="mt-2 leading-6 text-zinc-400">
+              Use <code>PROP("Column Name")</code> to reference another field.
+              Functions available: <code>IF</code>, <code>NOW</code>, <code>TODAY</code>,
+              <code>RENEWS_IN</code>, <code>DAYS_UNTIL</code>, <code>DATE_DIFF</code>,
+              <code>DATE_ADD</code>, <code>NUMBER</code>, <code>TEXT</code>, <code>ROUND</code>,
+              <code>MIN</code>, <code>MAX</code>, <code>ABS</code>, <code>LOWER</code>,
+              <code>UPPER</code>, and <code>IS_EMPTY</code>.
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="flex items-center justify-between gap-2 sm:justify-between">
+          <Button
+            type="button"
+            variant="ghost"
+            className="rounded-xl text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+            onClick={() =>
+              setDraftFormula({
+                expression: "",
+                resultType: "text",
+                displayStyle: "auto",
+              })
+            }
+          >
+            Clear
+          </Button>
+
+          <Button
+            type="button"
+            className="rounded-xl bg-white text-black hover:bg-zinc-200"
+            onClick={handleSave}
+          >
+            Save formula
           </Button>
         </DialogFooter>
       </DialogContent>

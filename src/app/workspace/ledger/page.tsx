@@ -57,7 +57,7 @@ function MetricCard({
 // ── Dashboard Tab ─────────────────────────────────────────────────────────────
 function DashboardTab() {
   const month = new Date().toISOString().slice(0, 7);
-  const data = useQuery(api.finance.getDashboardData, { month });
+  const data = useQuery(api.ledger.getDashboardData, { month });
 
   // Demo cashflow chart data
   const cashflowData = [
@@ -142,7 +142,7 @@ function DashboardTab() {
       <div className="bg-gradient-to-r from-violet-500/10 to-purple-500/5 border border-violet-500/20 rounded-2xl p-4">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-xs font-semibold text-violet-600 dark:text-violet-400 uppercase tracking-wide">
-            💡 Maddy's Finance Insight
+            💡 Maddy's Ledger Insight
           </span>
         </div>
         <p className="text-sm text-foreground/80">
@@ -155,7 +155,7 @@ function DashboardTab() {
 
 // ── Transactions Tab ──────────────────────────────────────────────────────────
 function TransactionsTab() {
-  const txns = useQuery(api.finance.listTransactions, { limit: 20 });
+  const txns = useQuery(api.ledger.listTransactions, { limit: 20 });
   const [showAdd, setShowAdd] = useState(false);
 
   return (
@@ -239,8 +239,8 @@ function TransactionsTab() {
 
 // ── Investments Tab ───────────────────────────────────────────────────────────
 function InvestmentsTab() {
-  const investments = useQuery(api.finance.listInvestments);
-  const goals = useQuery(api.finance.listGoals);
+  const investments = useQuery(api.ledger.listInvestments);
+  const goals = useQuery(api.ledger.listGoals);
 
   const DEMO = [
     { name: "Nifty 50 Index Fund", type: "mutual_fund", symbol: "NIFTYBEES", qty: 50, buy: 220, current: 248, platform: "Zerodha" },
@@ -357,8 +357,8 @@ function InvestmentsTab() {
 
 // ── Budget Tab ────────────────────────────────────────────────────────────────
 function BudgetTab() {
-  const budgets = useQuery(api.finance.listBudgets);
-  const categories = useQuery(api.finance.listCategories, { type: "expense" });
+  const budgets = useQuery(api.ledger.listBudgets);
+  const categories = useQuery(api.ledger.listCategories, { type: "expense" });
 
   const demoBudgets = [
     { name: "Food & Dining", icon: "🍔", budgeted: 10000, spent: 13200 },
@@ -412,9 +412,9 @@ function BudgetTab() {
   );
 }
 
-// ── Main Finance Page ─────────────────────────────────────────────────────────
-export default function FinancePage() {
-  const { financeTab, setFinanceTab } = useAppStore();
+// ── Main Ledger Page ──────────────────────────────────────────────────────────
+export default function LedgerPage() {
+  const { ledgerTab, setLedgerTab } = useAppStore();
 
   return (
     <div className="min-h-full bg-background">
@@ -422,7 +422,7 @@ export default function FinancePage() {
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b">
         <div className="max-w-5xl mx-auto px-4 py-3">
           <h1 className="text-lg font-bold tracking-tight flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-muted-foreground" /> Finance
+            <Wallet className="w-5 h-5 text-muted-foreground" /> LEDGER
           </h1>
         </div>
         {/* Tab bar — scrollable on mobile */}
@@ -431,10 +431,10 @@ export default function FinancePage() {
             {TABS.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setFinanceTab(tab.id)}
+                onClick={() => setLedgerTab(tab.id)}
                 className={cn(
                   "shrink-0 text-xs font-medium px-4 py-2 rounded-lg transition-all min-h-[36px]",
-                  financeTab === tab.id
+                  ledgerTab === tab.id
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:bg-muted"
                 )}
@@ -447,10 +447,10 @@ export default function FinancePage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-4 md:py-6">
-        {financeTab === "dashboard" && <DashboardTab />}
-        {financeTab === "transactions" && <TransactionsTab />}
-        {financeTab === "budget" && <BudgetTab />}
-        {financeTab === "investments" && <InvestmentsTab />}
+        {ledgerTab === "dashboard" && <DashboardTab />}
+        {ledgerTab === "transactions" && <TransactionsTab />}
+        {ledgerTab === "budget" && <BudgetTab />}
+        {ledgerTab === "investments" && <InvestmentsTab />}
       </div>
     </div>
   );

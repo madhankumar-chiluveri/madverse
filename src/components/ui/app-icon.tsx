@@ -3,14 +3,23 @@ import { cn } from "@/lib/utils";
 interface AppIconProps {
   className?: string;
   alt?: string;
+  variant?: "default" | "loader";
 }
 
-export function AppIcon({ className, alt = "MADVERSE" }: AppIconProps) {
+export function AppIcon({
+  className,
+  alt = "MADVERSE",
+  variant = "default",
+}: AppIconProps) {
   return (
     <img
-      src="/app-icon.png"
+      src={variant === "loader" ? "/app-icon-loader.svg" : "/app-icon.svg"}
       alt={alt}
-      className={cn("shrink-0 rounded-2xl object-cover", className)}
+      className={cn(
+        "shrink-0 rounded-2xl",
+        variant === "loader" ? "object-contain" : "object-cover",
+        className
+      )}
     />
   );
 }

@@ -111,9 +111,9 @@ function ArticleRow({ article }: { article: any }) {
 }
 
 // ── Main News Page ────────────────────────────────────────────────────────────
-export default function NewsPage() {
+export default function FeedPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const articles = useQuery(api.news.listArticles, {
+  const articles = useQuery(api.feed.listArticles, {
     category: activeCategory ? (activeCategory as any) : undefined,
     limit: 20,
   });
@@ -123,7 +123,7 @@ export default function NewsPage() {
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <h1 className="text-lg font-bold tracking-tight shrink-0">News Feed</h1>
+          <h1 className="text-lg font-bold tracking-tight shrink-0">FEED</h1>
           <button className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-2">
             <RefreshCw className="w-3.5 h-3.5" /> Refresh
           </button>

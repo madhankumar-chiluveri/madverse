@@ -34,6 +34,7 @@ import { toast } from "sonner";
 export function CommandPalette() {
   const { commandPaletteOpen, setCommandPaletteOpen, currentWorkspaceId } =
     useAppStore();
+  const setReminderCenterOpen = useAppStore((s) => s.setReminderCenterOpen);
   const router = useRouter();
   const [search, setSearch] = useState("");
 
@@ -165,6 +166,16 @@ export function CommandPalette() {
                   <CommandItem onSelect={handleCreatePage} className="cursor-pointer">
                     <Plus className="w-4 h-4 mr-2 text-muted-foreground" />
                     New page
+                  </CommandItem>
+                  <CommandItem
+                    onSelect={() => {
+                      setReminderCenterOpen(true);
+                      close();
+                    }}
+                    className="cursor-pointer"
+                  >
+                    <Clock className="w-4 h-4 mr-2 text-muted-foreground" />
+                    Open reminders
                   </CommandItem>
                   <CommandItem
                     onSelect={() => navigate("/workspace/settings")}

@@ -61,8 +61,8 @@ export const createNotification = mutation({
     title: v.string(),
     body: v.string(),
     module: v.union(
-      v.literal("overview"), v.literal("news"), v.literal("kb"),
-      v.literal("finance"), v.literal("ai")
+      v.literal("overview"), v.literal("feed"), v.literal("brain"),
+      v.literal("ledger"), v.literal("ai")
     ),
     actionUrl: v.optional(v.string()),
   },

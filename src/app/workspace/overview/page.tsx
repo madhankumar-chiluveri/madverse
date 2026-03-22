@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/store/app.store";
 import { cn } from "@/lib/utils";
+import { ReminderOverviewCard } from "@/components/reminders/reminder-overview-card";
 import {
   Sun, Moon, Sunset, ChevronRight,
   Zap, Timer, TrendingUp, TrendingDown, Newspaper,
@@ -202,11 +203,11 @@ function HabitStrip() {
   );
 }
 
-// ── Finance Snapshot ──────────────────────────────────────────────────────────
-function FinanceSnapshot() {
+// ── Ledger Snapshot ───────────────────────────────────────────────────────────
+function LedgerSnapshot() {
   const router = useRouter();
   const month = new Date().toISOString().slice(0, 7);
-  const data = useQuery(api.finance.getDashboardData, { month });
+  const data = useQuery(api.ledger.getDashboardData, { month });
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
@@ -214,11 +215,11 @@ function FinanceSnapshot() {
   return (
     <div
       className="bg-card border rounded-2xl p-4 cursor-pointer hover:border-primary/30 transition-colors"
-      onClick={() => router.push("/workspace/finance")}
+      onClick={() => router.push("/workspace/ledger")}
     >
       <div className="flex items-center gap-2 mb-3">
         <BarChart2 className="w-4 h-4 text-muted-foreground" />
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Finance</span>
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">LEDGER</span>
         <ChevronRight className="w-3 h-3 text-muted-foreground ml-auto" />
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -252,18 +253,18 @@ function FinanceSnapshot() {
 }
 
 // ── News Digest ───────────────────────────────────────────────────────────────
-function NewsDigest() {
+function FeedDigest() {
   const router = useRouter();
-  const articles = useQuery(api.news.getTopArticles, { limit: 3 });
+  const articles = useQuery(api.feed.getTopArticles, { limit: 3 });
 
   return (
     <div
       className="bg-card border rounded-2xl p-4 cursor-pointer hover:border-primary/30 transition-colors"
-      onClick={() => router.push("/workspace/news")}
+      onClick={() => router.push("/workspace/feed")}
     >
       <div className="flex items-center gap-2 mb-3">
         <Newspaper className="w-4 h-4 text-muted-foreground" />
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Today's News</span>
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">FEED</span>
         <ChevronRight className="w-3 h-3 text-muted-foreground ml-auto" />
       </div>
       <div className="space-y-2.5">
@@ -316,13 +317,17 @@ export default function OverviewPage() {
           {/* Habit strip — full width */}
           <HabitStrip />
 
-          {/* Finance + News — 2-col on desktop, stacked on mobile */}
-          <FinanceSnapshot />
-          <NewsDigest />
+          {/* Ledger + Feed — 2-col on desktop, stacked on mobile */}
+          <LedgerSnapshot />
+          <FeedDigest />
 
           {/* AI Insight — full width on mobile, 1-col on desktop */}
           <div className="md:col-span-1">
             <AIInsightWidget />
+          </div>
+
+          <div className="md:col-span-1">
+            <ReminderOverviewCard />
           </div>
 
           {/* Pomodoro — full width on mobile, fits in grid on desktop */}

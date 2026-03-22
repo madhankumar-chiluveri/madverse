@@ -288,7 +288,7 @@ export const seedDemoArticles = action({
     ];
 
     for (const article of articles) {
-      await ctx.runMutation("news:insertArticle" as any, article);
+      await ctx.runMutation("feed:insertArticle" as any, article);
     }
     return { inserted: articles.length };
   },

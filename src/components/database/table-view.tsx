@@ -1,57 +1,79 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useMutation } from "convex/react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Rows3, Trash2 } from "lucide-react";
 
-import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import { ReminderTriggerButton } from "@/components/reminders/reminder-trigger-button";
 import { cn } from "@/lib/utils";
-import type { PropertySchema, PropertyType, SelectOption } from "@/types/database";
+import type { FormulaConfig, PropertySchema, PropertyType, SelectOption } from "@/types/database";
+import { DatabaseRowSelectionBar } from "./database-row-selection-bar";
 import {
   ACTION_COLUMN_WIDTH,
   MIN_TABLE_WIDTH,
   createProperty,
-  getDefaultValueForProperty,
   getPropertyWidth,
-  normalizeProperties,
   normalizeValueForProperty,
   updateProperty,
 } from "./database-utils";
 import { PropertyHeaderMenu } from "./property-header-menu";
 import { PropertyCell } from "./property-cell";
 
+const SELECTION_COLUMN_WIDTH = 44;
+
 interface TableViewProps {
-  database: any;
+  workspaceId: Id<"workspaces">;
+  pageId: Id<"pages">;
+  databaseId: Id<"databases">;
+  databaseName: string;
+  properties: PropertySchema[];
   rows: any[] | undefined;
   totalRowCount?: number;
+  now?: number;
+  onAddRow: () => Promise<void>;
+  onUpdateRow: (rowId: Id<"rows">, data: Record<string, unknown>) => Promise<void>;
+  onBatchUpdateRows: (updates: Array<{ rowId: Id<"rows">; data: Record<string, unknown> }>) => Promise<void>;
+  onDeleteRow: (rowId: Id<"rows">) => Promise<void>;
+  onBatchDeleteRows: (rowIds: Id<"rows">[]) => Promise<void>;
+  onUpdateProperties: (updater: (current: PropertySchema[]) => PropertySchema[]) => Promise<void>;
 }
 
-export function TableView({ database, rows, totalRowCount }: TableViewProps) {
-  const addRow = useMutation(api.databases.addRow);
-  const updateRow = useMutation(api.databases.updateRow);
-  const deleteRow = useMutation(api.databases.deleteRow);
-  const updatePropertiesMutation = useMutation(api.databases.updateProperties);
-
+export function TableView({
+  workspaceId,
+  pageId,
+  databaseId,
+  databaseName,
+  properties,
+  rows,
+  totalRowCount,
+  now,
+  onAddRow,
+  onUpdateRow,
+  onBatchUpdateRows,
+  onDeleteRow,
+  onBatchDeleteRows,
+  onUpdateProperties,
+}: TableViewProps) {
   const [newRowLoading, setNewRowLoading] = useState(false);
   const [newPropertyLoading, setNewPropertyLoading] = useState(false);
-
-  const properties = useMemo(
-    () => normalizeProperties(database.properties ?? []),
-    [database.properties]
-  );
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
+  const titleProperty = properties.find((property) => property.type === "title");
+  const selectAllRef = useRef<HTMLInputElement | null>(null);
 
   const tableMinWidth = useMemo(() => {
     const dataColumnsWidth = properties.reduce(
       (total, property) => total + getPropertyWidth(property),
       0
     );
-    return Math.max(dataColumnsWidth + ACTION_COLUMN_WIDTH, MIN_TABLE_WIDTH);
+    return Math.max(
+      dataColumnsWidth + ACTION_COLUMN_WIDTH + SELECTION_COLUMN_WIDTH,
+      MIN_TABLE_WIDTH + SELECTION_COLUMN_WIDTH
+    );
   }, [properties]);
 
   const frozenState = useMemo(() => {
-    let currentOffset = 0;
+    let currentOffset = SELECTION_COLUMN_WIDTH;
     const offsets: Record<string, number> = {};
     const frozenIds: string[] = [];
 
@@ -68,15 +90,24 @@ export function TableView({ database, rows, totalRowCount }: TableViewProps) {
     };
   }, [properties]);
 
+  useEffect(() => {
+    if (!rows) {
+      return;
+    }
+
+    const visibleRowIdSet = new Set(rows.map((row: any) => String(row._id)));
+    setSelectedRowIds((current) => {
+      const next = new Set(
+        Array.from(current).filter((rowId) => visibleRowIdSet.has(rowId))
+      );
+      return next.size === current.size ? current : next;
+    });
+  }, [rows]);
+
   const persistProperties = async (
     updater: (current: PropertySchema[]) => PropertySchema[]
   ) => {
-    const nextProperties = normalizeProperties(updater(properties));
-
-    await updatePropertiesMutation({
-      id: database._id,
-      properties: nextProperties,
-    });
+    await onUpdateProperties(updater);
   };
 
   const getUniquePropertyName = (type: PropertyType, current: PropertySchema[]) => {
@@ -112,16 +143,7 @@ export function TableView({ database, rows, totalRowCount }: TableViewProps) {
   const handleAddRow = async () => {
     setNewRowLoading(true);
     try {
-      const initialData: Record<string, unknown> = {};
-
-      for (const property of properties) {
-        initialData[property.id] = getDefaultValueForProperty(property);
-      }
-
-      await addRow({
-        databaseId: database._id,
-        data: initialData,
-      });
+      await onAddRow();
     } finally {
       setNewRowLoading(false);
     }
@@ -131,13 +153,72 @@ export function TableView({ database, rows, totalRowCount }: TableViewProps) {
     const row = rows?.find((item: any) => item._id === rowId);
     if (!row) return;
 
-    await updateRow({
-      id: rowId,
-      data: {
-        ...row.data,
-        [property.id]: normalizeValueForProperty(property, value),
-      },
+    await onUpdateRow(rowId, {
+      ...row.data,
+      [property.id]: normalizeValueForProperty(property, value),
     });
+  };
+
+  const selectedRows = useMemo(
+    () => rows?.filter((row: any) => selectedRowIds.has(String(row._id))) ?? [],
+    [rows, selectedRowIds]
+  );
+  const selectedCount = selectedRows.length;
+  const allRowsSelected = Boolean(rows && rows.length > 0 && selectedCount === rows.length);
+
+  useEffect(() => {
+    if (!selectAllRef.current) {
+      return;
+    }
+
+    selectAllRef.current.indeterminate = selectedCount > 0 && !allRowsSelected;
+  }, [allRowsSelected, selectedCount]);
+
+  const toggleRowSelection = (rowId: Id<"rows">, checked: boolean) => {
+    setSelectedRowIds((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(String(rowId));
+      } else {
+        next.delete(String(rowId));
+      }
+      return next;
+    });
+  };
+
+  const toggleAllVisibleRows = (checked: boolean) => {
+    setSelectedRowIds(() => {
+      if (!checked || !rows) {
+        return new Set();
+      }
+
+      return new Set(rows.map((row: any) => String(row._id)));
+    });
+  };
+
+  const handleApplyPropertyToSelectedRows = async (property: PropertySchema, value: unknown) => {
+    if (selectedRows.length === 0) {
+      return;
+    }
+
+    await onBatchUpdateRows(
+      selectedRows.map((row: any) => ({
+        rowId: row._id,
+        data: {
+          ...row.data,
+          [property.id]: normalizeValueForProperty(property, value),
+        },
+      }))
+    );
+  };
+
+  const handleDeleteSelectedRows = async () => {
+    if (selectedRows.length === 0) {
+      return;
+    }
+
+    await onBatchDeleteRows(selectedRows.map((row: any) => row._id));
+    setSelectedRowIds(new Set());
   };
 
   const rowCount = rows?.length ?? 0;
@@ -148,31 +229,44 @@ export function TableView({ database, rows, totalRowCount }: TableViewProps) {
 
   return (
     <div className="database-shell overflow-hidden rounded-[24px] border border-white/8 bg-[#12110f] shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
-      <div className="flex items-center justify-between border-b border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))] px-4 py-3">
-        <div className="flex items-center gap-2 text-sm text-zinc-300">
-          <Rows3 className="h-4 w-4 text-zinc-500" />
-          <span>{rowCountLabel}</span>
-        </div>
+      <div className="border-b border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))] px-4 py-3">
+        {selectedCount > 0 ? (
+          <DatabaseRowSelectionBar
+            properties={properties}
+            selectedCount={selectedCount}
+            onApplyProperty={handleApplyPropertyToSelectedRows}
+            onDeleteSelected={handleDeleteSelectedRows}
+            onClearSelection={() => setSelectedRowIds(new Set())}
+          />
+        ) : (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-zinc-300">
+              <Rows3 className="h-4 w-4 text-zinc-500" />
+              <span>{rowCountLabel}</span>
+            </div>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={newPropertyLoading}
-          className="rounded-xl border border-white/8 bg-white/[0.03] text-zinc-100 hover:bg-white/[0.08] hover:text-white"
-          onClick={() => insertPropertyAt(properties.length)}
-        >
-          <Plus className="mr-1.5 h-4 w-4" />
-          {newPropertyLoading ? "Adding..." : "New property"}
-        </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={newPropertyLoading}
+              className="rounded-xl border border-white/8 bg-white/[0.03] text-zinc-100 hover:bg-white/[0.08] hover:text-white"
+              onClick={() => insertPropertyAt(properties.length)}
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              {newPropertyLoading ? "Adding..." : "New property"}
+            </Button>
+          </div>
+        )}
       </div>
 
-      <div className="notion-table-scroll min-h-[420px] max-h-[calc(100vh-250px)] w-full overflow-auto">
+      <div className="notion-table-scroll min-h-[420px] w-full overflow-x-auto">
         <table
           className="notion-database-table w-full table-fixed border-collapse text-[13px] text-zinc-100"
           style={{ minWidth: tableMinWidth }}
         >
           <colgroup>
+            <col style={{ width: SELECTION_COLUMN_WIDTH }} />
             {properties.map((property) => (
               <col key={property.id} style={{ width: getPropertyWidth(property) }} />
             ))}
@@ -181,6 +275,18 @@ export function TableView({ database, rows, totalRowCount }: TableViewProps) {
 
           <thead className="sticky top-0 z-30 bg-[#12110f]/95 backdrop-blur-md">
             <tr className="h-11 border-b border-white/8">
+              <th className="sticky left-0 z-50 border-r border-white/6 bg-[#171614] px-0 py-0 align-middle shadow-[1px_0_0_0_rgba(255,255,255,0.06)]">
+                <label className="flex h-11 items-center justify-center">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    checked={allRowsSelected}
+                    onChange={(event) => toggleAllVisibleRows(event.target.checked)}
+                    className="h-4 w-4 rounded border-white/15 bg-white/[0.04] accent-white"
+                    aria-label="Select all rows"
+                  />
+                </label>
+              </th>
               {properties.map((property) => {
                 const isFrozen = Boolean(property.config?.frozen);
                 const left = frozenState.offsets[property.id];
@@ -266,6 +372,15 @@ export function TableView({ database, rows, totalRowCount }: TableViewProps) {
                           )
                         )
                       }
+                      onSaveFormula={(formula: FormulaConfig) =>
+                        persistProperties((current) =>
+                          current.map((candidate) =>
+                            candidate.id === property.id
+                              ? updateProperty(candidate, { config: { formula } })
+                              : candidate
+                          )
+                        )
+                      }
                     />
                   </th>
                 );
@@ -278,25 +393,49 @@ export function TableView({ database, rows, totalRowCount }: TableViewProps) {
           <tbody>
             {rows === undefined ? (
               <tr>
-                <td colSpan={properties.length + 1} className="h-12 px-4 text-sm text-zinc-500">
+                <td colSpan={properties.length + 2} className="h-12 px-4 text-sm text-zinc-500">
                   Loading rows...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={properties.length + 1}
+                  colSpan={properties.length + 2}
                   className="px-4 py-16 text-center text-sm text-zinc-500"
                 >
                   No rows yet. Add your first entry to start building the database.
                 </td>
               </tr>
             ) : (
-              rows.map((row: any) => (
+              rows.map((row: any) => {
+                const isSelected = selectedRowIds.has(String(row._id));
+
+                return (
                 <tr
                   key={row._id}
-                  className="group border-b border-white/6 bg-[#12110f] transition-colors hover:bg-[#1a1916]"
+                  className={cn(
+                    "group border-b border-white/6 transition-colors",
+                    isSelected
+                      ? "bg-sky-500/[0.09] hover:bg-sky-500/[0.12]"
+                      : "bg-[#12110f] hover:bg-[#1a1916]"
+                  )}
                 >
+                  <td
+                    className={cn(
+                      "sticky left-0 z-30 border-r border-white/6 px-0 py-0 align-middle shadow-[1px_0_0_0_rgba(255,255,255,0.06)]",
+                      isSelected ? "bg-sky-950/55 group-hover:bg-sky-950/65" : "bg-[#12110f] group-hover:bg-[#1a1916]"
+                    )}
+                  >
+                    <label className="flex min-h-[38px] items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(event) => toggleRowSelection(row._id, event.target.checked)}
+                        className="h-4 w-4 rounded border-white/15 bg-white/[0.04] accent-white"
+                        aria-label={`Select row ${titleProperty ? String(row.data?.[titleProperty.id] ?? "Untitled row") : String(row._id)}`}
+                      />
+                    </label>
+                  </td>
                   {properties.map((property) => {
                     const isFrozen = Boolean(property.config?.frozen);
                     const left = frozenState.offsets[property.id];
@@ -307,7 +446,12 @@ export function TableView({ database, rows, totalRowCount }: TableViewProps) {
                         style={isFrozen ? { left } : undefined}
                         className={cn(
                           "border-r border-white/6 px-1 py-0 align-middle",
-                          isFrozen && "sticky z-20 bg-[#12110f] group-hover:bg-[#1a1916]",
+                          isFrozen &&
+                            "sticky z-20",
+                          isFrozen &&
+                            (isSelected
+                              ? "bg-sky-950/55 group-hover:bg-sky-950/65"
+                              : "bg-[#12110f] group-hover:bg-[#1a1916]"),
                           isFrozen &&
                             property.id === frozenState.lastFrozenId &&
                             "shadow-[1px_0_0_0_rgba(255,255,255,0.06),14px_0_28px_rgba(0,0,0,0.18)]"
@@ -317,6 +461,9 @@ export function TableView({ database, rows, totalRowCount }: TableViewProps) {
                           property={property}
                           value={row.data?.[property.id]}
                           rowCreatedAt={row._creationTime}
+                          rowData={row.data}
+                          allProperties={properties}
+                          now={now}
                           fullWidth
                           onChange={(nextValue) => handleCellChange(row._id, property, nextValue)}
                         />
@@ -324,12 +471,33 @@ export function TableView({ database, rows, totalRowCount }: TableViewProps) {
                     );
                   })}
 
-                  <td className="sticky right-0 z-20 border-l border-white/6 bg-[#12110f] px-0 py-0 align-middle shadow-[-1px_0_0_0_rgba(255,255,255,0.06)] group-hover:bg-[#1a1916]">
-                    <div className="flex items-center justify-center">
+                  <td className={cn(
+                    "sticky right-0 z-20 border-l border-white/6 px-0 py-0 align-middle shadow-[-1px_0_0_0_rgba(255,255,255,0.06)]",
+                    isSelected ? "bg-sky-950/55 group-hover:bg-sky-950/65" : "bg-[#12110f] group-hover:bg-[#1a1916]"
+                  )}>
+                    <div className="flex items-center justify-center gap-1">
+                      <ReminderTriggerButton
+                        workspaceId={workspaceId}
+                        iconOnly
+                        title="Create reminder from row"
+                        className="opacity-0 group-hover:opacity-100"
+                        initialValues={{
+                          title: `Follow up: ${
+                            titleProperty ? String(row.data?.[titleProperty.id] ?? "Untitled row") : "Untitled row"
+                          }`,
+                          pageId,
+                          databaseId,
+                          rowId: row._id,
+                          sourceLabel: `${databaseName} / ${
+                            titleProperty ? String(row.data?.[titleProperty.id] ?? "Untitled row") : "Untitled row"
+                          }`,
+                          sourceUrl: `/workspace/${pageId}`,
+                        }}
+                      />
                       <button
                         type="button"
                         className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 opacity-0 transition-all hover:bg-red-500/12 hover:text-red-300 group-hover:opacity-100"
-                        onClick={() => deleteRow({ id: row._id })}
+                        onClick={() => onDeleteRow(row._id)}
                         title="Delete row"
                         aria-label="Delete row"
                       >
@@ -338,13 +506,13 @@ export function TableView({ database, rows, totalRowCount }: TableViewProps) {
                     </div>
                   </td>
                 </tr>
-              ))
+              )})
             )}
           </tbody>
 
           <tfoot>
             <tr className="h-11 border-t border-white/8 bg-[#151412]">
-              <td colSpan={properties.length + 1} className="px-2 py-0">
+              <td colSpan={properties.length + 2} className="px-2 py-0">
                 <button
                   type="button"
                   className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-[13px] text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-zinc-100"

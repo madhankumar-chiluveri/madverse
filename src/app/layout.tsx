@@ -17,8 +17,8 @@ const robotoSerif = Roboto_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "MADVERSE — AI-Powered Knowledge OS",
-  description: "Your AI-powered personal knowledge OS. Organise everything with Maddy.",
+  title: "MADVERSE — AI-Powered BRAIN OS",
+  description: "Your AI-powered personal BRAIN OS. Organise everything with Maddy.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     title: "MADVERSE",
   },
   icons: {
-    icon: "/app-icon.png",
+    icon: "/app-icon.svg",
   },
 };
 

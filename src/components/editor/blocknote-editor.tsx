@@ -5,10 +5,11 @@ import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
 import { useMutation, useQuery } from "convex/react";
+import { Redo2, Undo2 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { useAppStore } from "@/store/app.store";
 import { useTheme } from "next-themes";
+import { Button } from "@/components/ui/button";
 import { cn, sanitizeForConvex } from "@/lib/utils";
 
 interface BlockNoteEditorProps {
@@ -23,12 +24,10 @@ export function BlockNoteEditor({
   isFullWidth = false,
 }: BlockNoteEditorProps) {
   const { resolvedTheme } = useTheme();
-  const { maddyEnabled, geminiApiKey } = useAppStore();
 
   // Load blocks from Convex
   const blocks = useQuery(api.blocks.listByPage, { pageId });
   const replaceAll = useMutation(api.blocks.replaceAll);
-  const tagPage = useMutation(api.pages.update);
 
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialized = useRef(false);
@@ -91,6 +90,31 @@ export function BlockNoteEditor({
 
   return (
     <div className={cn("blocknote-wrapper w-full min-h-[calc(100vh-200px)]", isFullWidth && "full-width-editor")}>
+      {editable && (
+        <div className="mb-3 flex items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 text-xs text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+            onClick={() => editor.undo()}
+          >
+            <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+            Undo
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 text-xs text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+            onClick={() => editor.redo()}
+          >
+            <Redo2 className="mr-1.5 h-3.5 w-3.5" />
+            Redo
+          </Button>
+        </div>
+      )}
+
       <BlockNoteView
         editor={editor}
         theme={resolvedTheme === "dark" ? "dark" : "light"}

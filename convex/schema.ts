@@ -349,8 +349,8 @@ export default defineSchema({
     title: v.string(),
     body: v.string(),
     module: v.union(
-      v.literal("overview"), v.literal("news"), v.literal("kb"),
-      v.literal("finance"), v.literal("ai")
+      v.literal("overview"), v.literal("feed"), v.literal("brain"),
+      v.literal("ledger"), v.literal("ai")
     ),
     actionUrl: v.optional(v.string()),
     isRead: v.boolean(),
@@ -358,4 +358,29 @@ export default defineSchema({
   })
     .index("by_userId", ["userId"])
     .index("by_userId_isRead", ["userId", "isRead"]),
+
+  reminders: defineTable({
+    userId: v.string(),
+    workspaceId: v.id("workspaces"),
+    title: v.string(),
+    note: v.optional(v.string()),
+    remindAt: v.number(),
+    status: v.union(
+      v.literal("scheduled"),
+      v.literal("completed"),
+      v.literal("cancelled")
+    ),
+    pageId: v.optional(v.union(v.id("pages"), v.null())),
+    databaseId: v.optional(v.union(v.id("databases"), v.null())),
+    rowId: v.optional(v.union(v.id("rows"), v.null())),
+    sourceLabel: v.optional(v.string()),
+    sourceUrl: v.optional(v.string()),
+    completedAt: v.optional(v.union(v.number(), v.null())),
+    notifiedAt: v.optional(v.union(v.number(), v.null())),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_workspaceId_remindAt", ["workspaceId", "remindAt"])
+    .index("by_workspaceId_status_remindAt", ["workspaceId", "status", "remindAt"]),
 });

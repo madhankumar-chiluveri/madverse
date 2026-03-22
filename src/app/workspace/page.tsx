@@ -38,7 +38,7 @@ export default function WorkspacePage() {
             <div className="max-w-3xl space-y-3">
               <div>
                 <p className="text-xs font-medium uppercase tracking-[0.22em] text-zinc-500">
-                  Knowledge Base
+                  BRAIN
                 </p>
                 <h1 className="mt-2 text-4xl font-semibold tracking-[-0.04em] text-white">
                   Organize work by project spaces
@@ -48,7 +48,7 @@ export default function WorkspacePage() {
               <p className="max-w-2xl text-sm leading-6 text-zinc-400">
                 Use the sidebar to create a dedicated space for each project. Every space gets its
                 own home page and keeps project tasks, notes, databases, and decisions separated
-                from the rest of your knowledge base.
+                from the rest of your BRAIN.
               </p>
 
               <div className="flex flex-wrap gap-2 pt-1">
@@ -72,7 +72,7 @@ export default function WorkspacePage() {
               <FolderKanban className="h-5 w-5 text-zinc-200" />
               <div>
                 <h2 className="text-lg font-semibold text-zinc-100">How spaces work</h2>
-                <p className="text-sm text-zinc-500">A cleaner project structure for your KB.</p>
+                <p className="text-sm text-zinc-500">A cleaner project structure for your BRAIN.</p>
               </div>
             </div>
 

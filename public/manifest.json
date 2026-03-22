@@ -9,10 +9,10 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/app-icon.png",
+      "src": "/app-icon.svg",
       "sizes": "any",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
   ],
   "shortcuts": [
@@ -21,7 +21,7 @@
       "short_name": "New",
       "description": "Create a new page",
       "url": "/workspace?new=true",
-      "icons": [{ "src": "/app-icon.png", "sizes": "any", "type": "image/png" }]
+      "icons": [{ "src": "/app-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
     }
   ],
   "categories": ["productivity", "utilities"],

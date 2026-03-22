@@ -1,41 +1,45 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
   ArrowUpDown,
-  ChevronDown,
   Filter,
   LayoutGrid,
   LayoutList,
   Plus,
+  Rows3,
   Search,
   Table,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ReminderTriggerButton } from "@/components/reminders/reminder-trigger-button";
 import { cn } from "@/lib/utils";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { BoardView } from "./board-view";
+import { DatabaseQuickFilterBar } from "./database-quick-filter-bar";
+import { DatabaseQuickSortBar } from "./database-quick-sort-bar";
 import {
+  buildInitialRowData,
+  cloneDatabaseValue,
   createProperty,
+  createSnapshotRowData,
   filterAndSortRows,
-  getDefaultValueForProperty,
+  getDefaultFilterOperator,
+  getDefaultFilterValue,
+  getFilterOperatorOptions,
+  isFilterConditionActive,
   normalizeProperties,
-  supportsOptions,
   updateProperty,
 } from "./database-utils";
 import { ListView } from "./list-view";
 import { TableView } from "./table-view";
+import type { FilterCondition, FilterGroup, PropertySchema, SortRule } from "@/types/database";
 
 interface DatabaseViewProps {
   page: any;
@@ -43,8 +47,356 @@ interface DatabaseViewProps {
 
 type ViewType = "table" | "board" | "list";
 
-const NONE_VALUE = "__none";
-const EMPTY_FILTER_VALUE = "__empty";
+interface DatabaseSnapshotRow {
+  data: Record<string, unknown>;
+  sortOrder: number;
+  pageId: Id<"pages"> | null;
+  isArchived?: boolean;
+}
+
+interface DatabaseSnapshot {
+  properties: PropertySchema[];
+  rows: DatabaseSnapshotRow[];
+}
+
+interface DatabaseHistoryEntry {
+  before: DatabaseSnapshot;
+  after: DatabaseSnapshot;
+  label: string;
+}
+
+interface DatabaseRowRecord {
+  _id: Id<"rows">;
+  _creationTime: number;
+  data?: Record<string, unknown>;
+  sortOrder: number;
+  pageId?: Id<"pages"> | null;
+  isArchived?: boolean;
+}
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  const editableSelector = "input, textarea, select, [contenteditable='true']";
+  return Boolean(target.closest(editableSelector));
+}
+
+function appendHistoryEntry<T>(entries: T[], entry: T) {
+  return [...entries.slice(-49), entry];
+}
+
+function cloneFilterGroup(group: FilterGroup): FilterGroup {
+  return {
+    operator: group.operator,
+    conditions: group.conditions.map((condition) => ({
+      propertyId: condition.propertyId,
+      operator: condition.operator,
+      value: cloneDatabaseValue(condition.value),
+    })),
+  };
+}
+
+function cloneSortRules(rules: SortRule[]): SortRule[] {
+  return rules.map((rule) => ({
+    propertyId: rule.propertyId,
+    direction: rule.direction,
+  }));
+}
+
+function areSortRulesEqual(left: SortRule[], right: SortRule[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((rule, index) => {
+    const candidate = right[index];
+    return rule.propertyId === candidate.propertyId && rule.direction === candidate.direction;
+  });
+}
+
+function areFilterGroupsEqual(left: FilterGroup, right: FilterGroup) {
+  if (left.operator !== right.operator || left.conditions.length !== right.conditions.length) {
+    return false;
+  }
+
+  return left.conditions.every((condition, index) => {
+    const candidate = right.conditions[index];
+
+    return (
+      condition.propertyId === candidate.propertyId &&
+      condition.operator === candidate.operator &&
+      JSON.stringify(condition.value ?? null) === JSON.stringify(candidate.value ?? null)
+    );
+  });
+}
+
+function sanitizeFilterGroup(group: FilterGroup, properties: PropertySchema[]): FilterGroup {
+  const nextConditions = group.conditions
+    .filter((condition) => properties.some((property) => property.id === condition.propertyId))
+    .map((condition) => {
+      const property = properties.find((candidate) => candidate.id === condition.propertyId);
+      if (!property) {
+        return condition;
+      }
+
+      const availableOperators = getFilterOperatorOptions(property).map((option) => option.value);
+      if (availableOperators.includes(condition.operator)) {
+        return condition;
+      }
+
+      const nextOperator = getDefaultFilterOperator(property);
+      return {
+        ...condition,
+        operator: nextOperator,
+        value: getDefaultFilterValue(property, nextOperator),
+      };
+    });
+
+  return {
+    ...group,
+    conditions: nextConditions,
+  };
+}
+
+function getPersistableFilterGroup(group: FilterGroup, properties: PropertySchema[]): FilterGroup {
+  return {
+    operator: group.operator,
+    conditions: group.conditions
+      .filter((condition) => isFilterConditionActive(condition, properties))
+      .map((condition) => ({
+        propertyId: condition.propertyId,
+        operator: condition.operator,
+        value: cloneDatabaseValue(condition.value),
+      })),
+  };
+}
+
+function sanitizeSortRules(rules: SortRule[], properties: PropertySchema[]): SortRule[] {
+  return rules.filter((rule) => properties.some((property) => property.id === rule.propertyId));
+}
+
+function getNormalizedIdValue(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+
+  const nextValue = Math.floor(numericValue);
+  return nextValue >= 1 ? nextValue : null;
+}
+
+function assignIdValuesToExistingRows(
+  rows: DatabaseRowRecord[],
+  nextProperties: PropertySchema[],
+  previousProperties: PropertySchema[]
+) {
+  const previousById = new Map(previousProperties.map((property) => [property.id, property]));
+  const propertyById = new Map(nextProperties.map((property) => [property.id, property]));
+  const hydratedRows = rows.map((row) => ({
+    ...row,
+    data: cloneDatabaseValue(row.data ?? {}),
+  }));
+  const rowUpdatesById = new Map<string, { rowId: Id<"rows">; data: Record<string, unknown> }>();
+  let hydratedProperties = [...nextProperties];
+
+  for (const property of nextProperties) {
+    if (property.type !== "id") {
+      continue;
+    }
+
+    const previousProperty = previousById.get(property.id);
+    const isNewIdProperty = previousProperty?.type !== "id";
+    let nextIdValue = Math.max(1, getNormalizedIdValue(property.config?.nextId) ?? 1);
+
+    if (isNewIdProperty) {
+      nextIdValue = 1;
+
+      hydratedRows.forEach((row) => {
+        if (row.data[property.id] !== nextIdValue) {
+          row.data[property.id] = nextIdValue;
+          rowUpdatesById.set(String(row._id), {
+            rowId: row._id,
+            data: row.data,
+          });
+        }
+
+        nextIdValue += 1;
+      });
+    } else {
+      let maxAssignedValue = 0;
+
+      hydratedRows.forEach((row) => {
+        const currentIdValue = getNormalizedIdValue(row.data[property.id]);
+        if (currentIdValue !== null) {
+          maxAssignedValue = Math.max(maxAssignedValue, currentIdValue);
+        }
+      });
+
+      nextIdValue = Math.max(nextIdValue, maxAssignedValue + 1);
+
+      hydratedRows.forEach((row) => {
+        const currentIdValue = getNormalizedIdValue(row.data[property.id]);
+        if (currentIdValue !== null) {
+          return;
+        }
+
+        row.data[property.id] = nextIdValue;
+        rowUpdatesById.set(String(row._id), {
+          rowId: row._id,
+          data: row.data,
+        });
+        nextIdValue += 1;
+      });
+    }
+
+    const currentProperty = propertyById.get(property.id);
+    if (!currentProperty) {
+      continue;
+    }
+
+    const currentNextId = getNormalizedIdValue(currentProperty.config?.nextId) ?? 1;
+    if (currentNextId !== nextIdValue) {
+      hydratedProperties = hydratedProperties.map((candidate) =>
+        candidate.id === property.id ? updateProperty(candidate, { config: { nextId: nextIdValue } }) : candidate
+      );
+    }
+  }
+
+  return {
+    properties: hydratedProperties,
+    rows: hydratedRows,
+    rowUpdates: Array.from(rowUpdatesById.values()),
+  };
+}
+
+function allocateIdValuesForNewRow(
+  properties: PropertySchema[],
+  initialData: Record<string, unknown>
+) {
+  let nextData = cloneDatabaseValue(initialData) ?? {};
+  let nextProperties = [...properties];
+
+  for (const property of properties) {
+    if (property.type !== "id") {
+      continue;
+    }
+
+    const nextIdValue = Math.max(1, getNormalizedIdValue(property.config?.nextId) ?? 1);
+    nextData = {
+      ...nextData,
+      [property.id]: nextIdValue,
+    };
+    nextProperties = nextProperties.map((candidate) =>
+      candidate.id === property.id ? updateProperty(candidate, { config: { nextId: nextIdValue + 1 } }) : candidate
+    );
+  }
+
+  return {
+    data: nextData,
+    properties: nextProperties,
+  };
+}
+
+function ToolbarIconButton({
+  active,
+  count,
+  label,
+  onClick,
+  children,
+  className,
+  disabled,
+}: {
+  active?: boolean;
+  count?: number;
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+  className?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "relative flex h-9 w-9 items-center justify-center rounded-xl border transition-colors",
+        active
+          ? "border-sky-500/30 bg-sky-500/14 text-sky-100"
+          : "border-white/8 bg-white/[0.03] text-zinc-400 hover:bg-white/[0.06] hover:text-white",
+        disabled && "cursor-not-allowed border-white/6 bg-white/[0.02] text-zinc-700 hover:bg-white/[0.02] hover:text-zinc-700",
+        className
+      )}
+    >
+      {children}
+      {count && count > 0 ? (
+        <span className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full border border-sky-400/25 bg-sky-500 px-1.5 text-center text-[10px] font-semibold leading-5 text-white shadow-[0_6px_14px_rgba(14,165,233,0.28)]">
+          {count}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function ActiveControlChip({
+  label,
+  onClick,
+  onRemove,
+  tone = "neutral",
+  removable = true,
+  icon,
+}: {
+  label: string;
+  onClick?: () => void;
+  onRemove?: () => void;
+  tone?: "neutral" | "accent" | "muted";
+  removable?: boolean;
+  icon?: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "inline-flex items-center rounded-full border text-xs transition-colors",
+        tone === "accent" && "border-sky-500/25 bg-sky-500/14 text-sky-100",
+        tone === "neutral" && "border-white/10 bg-white/[0.05] text-zinc-300",
+        tone === "muted" && "border-white/8 bg-white/[0.03] text-zinc-400"
+      )}
+    >
+      <button
+        type="button"
+        onClick={onClick ?? onRemove}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 transition-colors hover:text-white"
+      >
+        {icon}
+        <span className="truncate">{label}</span>
+      </button>
+      {removable && onRemove ? (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="pr-2 text-zinc-500 transition-colors hover:text-white"
+          aria-label={`Remove ${label}`}
+          title={`Remove ${label}`}
+        >
+          <X className="h-3 w-3" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 export function DatabaseView({ page }: DatabaseViewProps) {
   const [viewType, setViewType] = useState<ViewType>("table");
@@ -52,14 +404,33 @@ export function DatabaseView({ page }: DatabaseViewProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [quickAddLoading, setQuickAddLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterPropertyId, setFilterPropertyId] = useState<string | null>(null);
-  const [filterValue, setFilterValue] = useState("");
-  const [sortPropertyId, setSortPropertyId] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sortsOpen, setSortsOpen] = useState(false);
+  const [groupByOpen, setGroupByOpen] = useState(false);
+  const [filterGroup, setFilterGroup] = useState<FilterGroup>({
+    operator: "and",
+    conditions: [],
+  });
+  const [savedFilterGroup, setSavedFilterGroup] = useState<FilterGroup>({
+    operator: "and",
+    conditions: [],
+  });
+  const [savedSortRules, setSavedSortRules] = useState<SortRule[]>([]);
+  const [sortRules, setSortRules] = useState<SortRule[]>([]);
   const [boardGroupByPropertyId, setBoardGroupByPropertyId] = useState<string | null>(null);
+  const [undoStack, setUndoStack] = useState<DatabaseHistoryEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<DatabaseHistoryEntry[]>([]);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const [formulaNow, setFormulaNow] = useState(() => Date.now());
 
   const updatePage = useMutation(api.pages.update);
-  const addRow = useMutation(api.databases.addRow);
+  const addRowMutation = useMutation(api.databases.addRow);
+  const updateRowMutation = useMutation(api.databases.updateRow);
+  const deleteRowMutation = useMutation(api.databases.deleteRow);
+  const updatePropertiesMutation = useMutation(api.databases.updateProperties);
+  const replaceRowsMutation = useMutation(api.databases.replaceRows);
+
   const database = useQuery(api.databases.getByPage, { pageId: page._id });
   const rows = useQuery(
     api.databases.listRows,
@@ -70,50 +441,156 @@ export function DatabaseView({ page }: DatabaseViewProps) {
     () => (database ? normalizeProperties(database.properties ?? []) : []),
     [database]
   );
-  const filterProperty =
-    properties.find((property) => property.id === filterPropertyId) ?? null;
   const selectProperties = properties.filter((property) => property.type === "select");
   const visibleRows = useMemo(() => {
     if (rows === undefined) return undefined;
+
     return filterAndSortRows(rows, properties, {
       searchQuery: deferredSearchQuery,
-      filter: {
-        propertyId: filterPropertyId,
-        value: filterValue,
-      },
-      sort: {
-        propertyId: sortPropertyId,
-        direction: sortDirection,
-      },
+      filters: filterGroup,
+      sorts: sortRules,
+      now: formulaNow,
     });
-  }, [deferredSearchQuery, filterPropertyId, filterValue, properties, rows, sortDirection, sortPropertyId]);
+  }, [deferredSearchQuery, filterGroup, formulaNow, properties, rows, sortRules]);
 
   useEffect(() => {
-    if (filterPropertyId && !properties.some((property) => property.id === filterPropertyId)) {
-      setFilterPropertyId(null);
-      setFilterValue("");
-    }
-  }, [filterPropertyId, properties]);
+    const interval = window.setInterval(() => setFormulaNow(Date.now()), 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
-    if (sortPropertyId && !properties.some((property) => property.id === sortPropertyId)) {
-      setSortPropertyId(null);
-    }
-  }, [properties, sortPropertyId]);
+    setTitle(page.title);
+  }, [page.title]);
+
+  useEffect(() => {
+    const emptyFilterGroup: FilterGroup = {
+      operator: "and",
+      conditions: [],
+    };
+
+    setFilterGroup(emptyFilterGroup);
+    setSavedFilterGroup(emptyFilterGroup);
+    setSavedSortRules([]);
+    setSortRules([]);
+    setSearchQuery("");
+    setSearchOpen(false);
+    setFiltersOpen(false);
+    setSortsOpen(false);
+    setGroupByOpen(false);
+    setUndoStack([]);
+    setRedoStack([]);
+  }, [database?._id]);
+
+  useEffect(() => {
+    setFilterGroup((current) => {
+      const next = sanitizeFilterGroup(current, properties);
+      return areFilterGroupsEqual(current, next) ? current : next;
+    });
+  }, [properties]);
+
+  useEffect(() => {
+    setSavedFilterGroup((current) => {
+      const next = sanitizeFilterGroup(current, properties);
+      return areFilterGroupsEqual(current, next) ? current : next;
+    });
+  }, [properties]);
+
+  useEffect(() => {
+    setSortRules((current) => {
+      const next = sanitizeSortRules(current, properties);
+      return areSortRulesEqual(current, next) ? current : next;
+    });
+  }, [properties]);
+
+  useEffect(() => {
+    setSavedSortRules((current) => {
+      const next = sanitizeSortRules(current, properties);
+      return areSortRulesEqual(current, next) ? current : next;
+    });
+  }, [properties]);
 
   useEffect(() => {
     if (selectProperties.length === 0) {
-      setBoardGroupByPropertyId(null);
+      if (boardGroupByPropertyId !== null) {
+        setBoardGroupByPropertyId(null);
+      }
       return;
     }
+
+    const nextGroupByPropertyId = selectProperties[0].id;
 
     if (
       !boardGroupByPropertyId ||
       !selectProperties.some((property) => property.id === boardGroupByPropertyId)
     ) {
-      setBoardGroupByPropertyId(selectProperties[0].id);
+      if (boardGroupByPropertyId !== nextGroupByPropertyId) {
+        setBoardGroupByPropertyId(nextGroupByPropertyId);
+      }
     }
   }, [boardGroupByPropertyId, selectProperties]);
+
+  useEffect(() => {
+    if (viewType !== "board" && groupByOpen) {
+      setGroupByOpen(false);
+    }
+  }, [groupByOpen, viewType]);
+
+  const createSnapshot = useCallback(
+    (
+      sourceRows:
+        | Array<{
+            _creationTime: number;
+            data?: Record<string, unknown>;
+            sortOrder: number;
+            pageId?: Id<"pages"> | null;
+            isArchived?: boolean;
+          }>
+        | undefined = rows,
+      sourceProperties = properties
+    ): DatabaseSnapshot | null => {
+      if (sourceRows === undefined) {
+        return null;
+      }
+
+      return {
+        properties: cloneDatabaseValue(normalizeProperties(sourceProperties)),
+        rows: sourceRows.map((row: any) => ({
+          data: createSnapshotRowData(row.data, sourceProperties, row._creationTime),
+          sortOrder: row.sortOrder,
+          pageId: row.pageId ?? null,
+          isArchived: row.isArchived ?? false,
+        })),
+      };
+    },
+    [properties, rows]
+  );
+
+  const applySnapshot = useCallback(
+    async (snapshot: DatabaseSnapshot) => {
+      if (!database) return;
+
+      await updatePropertiesMutation({
+        id: database._id,
+        properties: snapshot.properties,
+      });
+
+      await replaceRowsMutation({
+        databaseId: database._id,
+        rows: snapshot.rows.map((row) => ({
+          data: row.data,
+          sortOrder: row.sortOrder,
+          pageId: row.pageId ?? null,
+          isArchived: row.isArchived ?? false,
+        })),
+      });
+    },
+    [database, replaceRowsMutation, updatePropertiesMutation]
+  );
+
+  const pushHistoryEntry = useCallback((entry: DatabaseHistoryEntry) => {
+    setUndoStack((current) => appendHistoryEntry(current, entry));
+    setRedoStack([]);
+  }, []);
 
   const handleTitleSave = async () => {
     setEditingTitle(false);
@@ -122,40 +599,550 @@ export function DatabaseView({ page }: DatabaseViewProps) {
     }
   };
 
-  const handleQuickAddRow = async () => {
-    if (!database) return;
+  const handleAddRow = useCallback(
+    async (initialData?: Record<string, unknown>) => {
+      if (!database || rows === undefined) return;
 
-    setQuickAddLoading(true);
-    try {
-      const initialData: Record<string, unknown> = {};
-      for (const property of properties) {
-        initialData[property.id] = getDefaultValueForProperty(property);
+      const before = createSnapshot();
+      if (!before) return;
+
+      const baseData = {
+        ...buildInitialRowData(properties, formulaNow),
+        ...(cloneDatabaseValue(initialData) ?? {}),
+      };
+      const { data: nextData, properties: nextProperties } = allocateIdValuesForNewRow(
+        properties,
+        baseData
+      );
+      const didAdvanceIdCounters = properties.some(
+        (property, index) => nextProperties[index] !== property
+      );
+      const nextSortOrder = before.rows.reduce(
+        (max, row) => Math.max(max, row.sortOrder),
+        0
+      ) + 1000;
+
+      await addRowMutation({
+        databaseId: database._id,
+        data: nextData,
+      });
+
+      if (didAdvanceIdCounters) {
+        await updatePropertiesMutation({
+          id: database._id,
+          properties: nextProperties,
+        });
       }
 
-      await addRow({
-        databaseId: database._id,
-        data: initialData,
+      const after = createSnapshot(
+        [
+          ...rows,
+          {
+            _creationTime: formulaNow,
+            pageId: null,
+            data: nextData,
+            sortOrder: nextSortOrder,
+            isArchived: false,
+          },
+        ],
+        nextProperties
+      );
+
+      if (after) {
+        pushHistoryEntry({
+          before,
+          after,
+          label: "Add row",
+        });
+      }
+    },
+    [
+      addRowMutation,
+      createSnapshot,
+      database,
+      formulaNow,
+      properties,
+      pushHistoryEntry,
+      rows,
+      updatePropertiesMutation,
+    ]
+  );
+
+  const handleUpdateRow = useCallback(
+    async (rowId: Id<"rows">, data: Record<string, unknown>) => {
+      if (rows === undefined) return;
+
+      const before = createSnapshot();
+      if (!before) return;
+
+      const nextData = cloneDatabaseValue(data) ?? {};
+      await updateRowMutation({
+        id: rowId,
+        data: nextData,
       });
+
+      const after = createSnapshot(
+        rows.map((row: any) =>
+          row._id === rowId
+            ? {
+                ...row,
+                data: nextData,
+              }
+            : row
+        ),
+        properties
+      );
+
+      if (after) {
+        pushHistoryEntry({
+          before,
+          after,
+          label: "Update row",
+        });
+      }
+    },
+    [createSnapshot, properties, pushHistoryEntry, rows, updateRowMutation]
+  );
+
+  const handleDeleteRow = useCallback(
+    async (rowId: Id<"rows">) => {
+      if (rows === undefined) return;
+
+      const before = createSnapshot();
+      if (!before) return;
+
+      await deleteRowMutation({ id: rowId });
+
+      const after = createSnapshot(
+        rows.filter((row: any) => row._id !== rowId),
+        properties
+      );
+
+      if (after) {
+        pushHistoryEntry({
+          before,
+          after,
+          label: "Delete row",
+        });
+      }
+    },
+    [createSnapshot, deleteRowMutation, properties, pushHistoryEntry, rows]
+  );
+
+  const handleBatchUpdateRows = useCallback(
+    async (updates: Array<{ rowId: Id<"rows">; data: Record<string, unknown> }>) => {
+      if (rows === undefined || updates.length === 0) return;
+
+      const before = createSnapshot();
+      if (!before) return;
+
+      const normalizedUpdates = updates.map((update) => ({
+        rowId: update.rowId,
+        data: cloneDatabaseValue(update.data) ?? {},
+      }));
+      const updatesById = new Map(
+        normalizedUpdates.map((update) => [String(update.rowId), update.data])
+      );
+
+      await Promise.all(
+        normalizedUpdates.map((update) =>
+          updateRowMutation({
+            id: update.rowId,
+            data: update.data,
+          })
+        )
+      );
+
+      const after = createSnapshot(
+        rows.map((row: any) =>
+          updatesById.has(String(row._id))
+            ? {
+                ...row,
+                data: updatesById.get(String(row._id)),
+              }
+            : row
+        ),
+        properties
+      );
+
+      if (after) {
+        pushHistoryEntry({
+          before,
+          after,
+          label: normalizedUpdates.length === 1 ? "Update row" : "Update selected rows",
+        });
+      }
+    },
+    [createSnapshot, properties, pushHistoryEntry, rows, updateRowMutation]
+  );
+
+  const handleBatchDeleteRows = useCallback(
+    async (rowIds: Id<"rows">[]) => {
+      if (rows === undefined || rowIds.length === 0) return;
+
+      const before = createSnapshot();
+      if (!before) return;
+
+      const rowIdSet = new Set(rowIds.map((rowId) => String(rowId)));
+      await Promise.all(
+        rowIds.map((rowId) =>
+          deleteRowMutation({
+            id: rowId,
+          })
+        )
+      );
+
+      const after = createSnapshot(
+        rows.filter((row: any) => !rowIdSet.has(String(row._id))),
+        properties
+      );
+
+      if (after) {
+        pushHistoryEntry({
+          before,
+          after,
+          label: rowIds.length === 1 ? "Delete row" : "Delete selected rows",
+        });
+      }
+    },
+    [createSnapshot, deleteRowMutation, properties, pushHistoryEntry, rows]
+  );
+
+  const handleUpdateProperties = useCallback(
+    async (updater: (current: PropertySchema[]) => PropertySchema[]) => {
+      if (!database || rows === undefined) return;
+
+      const before = createSnapshot();
+      if (!before) return;
+
+      const baseNextProperties = normalizeProperties(updater(properties));
+      const syncedState = assignIdValuesToExistingRows(
+        rows as DatabaseRowRecord[],
+        baseNextProperties,
+        properties
+      );
+      const nextProperties = syncedState.properties;
+      await updatePropertiesMutation({
+        id: database._id,
+        properties: nextProperties,
+      });
+
+      if (syncedState.rowUpdates.length > 0) {
+        await Promise.all(
+          syncedState.rowUpdates.map((rowUpdate) =>
+            updateRowMutation({
+              id: rowUpdate.rowId,
+              data: rowUpdate.data,
+            })
+          )
+        );
+      }
+
+      const after = createSnapshot(syncedState.rows, nextProperties);
+
+      if (after) {
+        pushHistoryEntry({
+          before,
+          after,
+          label: "Update properties",
+        });
+      }
+    },
+    [
+      createSnapshot,
+      database,
+      properties,
+      pushHistoryEntry,
+      rows,
+      updatePropertiesMutation,
+      updateRowMutation,
+    ]
+  );
+
+  const handleQuickAddRow = async () => {
+    setQuickAddLoading(true);
+    try {
+      await handleAddRow();
     } finally {
       setQuickAddLoading(false);
     }
   };
 
-  const viewTabs: { id: ViewType; label: string; icon: React.ReactNode }[] = [
+  const handleUndo = useCallback(async () => {
+    const entry = undoStack[undoStack.length - 1];
+    if (!entry || historyBusy) return;
+
+    setHistoryBusy(true);
+    try {
+      await applySnapshot(entry.before);
+      setUndoStack((current) => current.slice(0, -1));
+      setRedoStack((current) => appendHistoryEntry(current, entry));
+    } catch (error) {
+      console.error(error);
+      toast.error(`Could not undo ${entry.label.toLowerCase()}.`);
+    } finally {
+      setHistoryBusy(false);
+    }
+  }, [applySnapshot, historyBusy, undoStack]);
+
+  const handleRedo = useCallback(async () => {
+    const entry = redoStack[redoStack.length - 1];
+    if (!entry || historyBusy) return;
+
+    setHistoryBusy(true);
+    try {
+      await applySnapshot(entry.after);
+      setRedoStack((current) => current.slice(0, -1));
+      setUndoStack((current) => appendHistoryEntry(current, entry));
+    } catch (error) {
+      console.error(error);
+      toast.error(`Could not redo ${entry.label.toLowerCase()}.`);
+    } finally {
+      setHistoryBusy(false);
+    }
+  }, [applySnapshot, historyBusy, redoStack]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) {
+        return;
+      }
+
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === "z" && event.shiftKey) {
+        event.preventDefault();
+        void handleRedo();
+        return;
+      }
+
+      if (key === "z") {
+        event.preventDefault();
+        void handleUndo();
+        return;
+      }
+
+      if (key === "y") {
+        event.preventDefault();
+        void handleRedo();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleRedo, handleUndo]);
+
+  const viewTabs: { id: ViewType; label: string; icon: ReactNode }[] = [
     { id: "table", label: "Table", icon: <Table className="h-3.5 w-3.5" /> },
     { id: "board", label: "Board", icon: <LayoutGrid className="h-3.5 w-3.5" /> },
     { id: "list", label: "List", icon: <LayoutList className="h-3.5 w-3.5" /> },
   ];
 
-  const clearControls = () => {
-    setSearchQuery("");
-    setFilterPropertyId(null);
-    setFilterValue("");
-    setSortPropertyId(null);
-    setSortDirection("asc");
+  const activeFilters = useMemo(
+    () =>
+      filterGroup.conditions
+        .map((condition, index) => ({ condition, index }))
+        .filter(({ condition }) => isFilterConditionActive(condition, properties)),
+    [filterGroup.conditions, properties]
+  );
+  const activeSorts = useMemo(
+    () =>
+      sortRules
+        .map((rule, index) => ({ rule, index }))
+        .filter(({ rule }) => properties.some((property) => property.id === rule.propertyId)),
+    [properties, sortRules]
+  );
+  const hasPendingFilterChanges = useMemo(
+    () => !areFilterGroupsEqual(filterGroup, savedFilterGroup),
+    [filterGroup, savedFilterGroup]
+  );
+  const hasPendingSortChanges = useMemo(
+    () => !areSortRulesEqual(sortRules, savedSortRules),
+    [savedSortRules, sortRules]
+  );
+
+  const clearFilterConditions = () => {
+    setFilterGroup((current) =>
+      current.conditions.length === 0 ? current : { ...current, conditions: [] }
+    );
   };
 
-  const hasActiveControls = Boolean(searchQuery || filterPropertyId || sortPropertyId);
+  const clearSortRules = () => {
+    setSortRules((current) => (current.length === 0 ? current : []));
+  };
+
+  const clearControls = () => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    clearFilterConditions();
+    clearSortRules();
+  };
+
+  const updateQuickFilterGroup = (updater: (current: FilterGroup) => FilterGroup) => {
+    setFilterGroup((current) => updater(current));
+  };
+  const updateQuickSortRules = (updater: (current: SortRule[]) => SortRule[]) => {
+    setSortRules((current) => updater(current));
+  };
+
+  const handleResetFilters = () => {
+    const nextFilterGroup = cloneFilterGroup(savedFilterGroup);
+    setFilterGroup(nextFilterGroup);
+    setFiltersOpen(nextFilterGroup.conditions.length > 0);
+    toast.success(
+      nextFilterGroup.conditions.length > 0
+        ? "Filters reset to the saved view."
+        : "Quick filters cleared."
+    );
+  };
+
+  const handleSaveFilters = () => {
+    const nextFilterGroup = getPersistableFilterGroup(filterGroup, properties);
+    setFilterGroup(nextFilterGroup);
+    setSavedFilterGroup(cloneFilterGroup(nextFilterGroup));
+    setFiltersOpen(nextFilterGroup.conditions.length > 0);
+    toast.success(
+      nextFilterGroup.conditions.length > 0
+        ? "Quick filters saved for this view for this session."
+        : "Filter changes saved for this view for this session."
+    );
+  };
+  const handleResetSorts = () => {
+    const nextSortRules = cloneSortRules(savedSortRules);
+    setSortRules(nextSortRules);
+    setSortsOpen(nextSortRules.length > 0);
+    toast.success(
+      nextSortRules.length > 0
+        ? "Sorts reset to the saved view."
+        : "Quick sorts cleared."
+    );
+  };
+  const handleSaveSorts = () => {
+    const nextSortRules = cloneSortRules(sanitizeSortRules(sortRules, properties));
+    setSortRules(nextSortRules);
+    setSavedSortRules(cloneSortRules(nextSortRules));
+    setSortsOpen(nextSortRules.length > 0);
+    toast.success(
+      nextSortRules.length > 0
+        ? "Quick sorts saved for this view for this session."
+        : "Sort changes saved for this view for this session."
+    );
+  };
+
+  const hasActiveControls = Boolean(
+    searchQuery.trim() ||
+      activeFilters.length ||
+      activeSorts.length ||
+      hasPendingFilterChanges ||
+      hasPendingSortChanges
+  );
+  const activeBoardGroupProperty =
+    viewType === "board"
+      ? selectProperties.find((property) => property.id === boardGroupByPropertyId) ?? selectProperties[0] ?? null
+      : null;
+  const activePanel: "group" | null = groupByOpen ? "group" : null;
+  const showSearchInput = searchOpen || Boolean(searchQuery.trim());
+
+  const toggleSearchPanel = () => {
+    setSearchOpen((current) => {
+      const next = !current;
+      if (next) {
+        setFiltersOpen(false);
+        setSortsOpen(false);
+        setGroupByOpen(false);
+      }
+      return next;
+    });
+  };
+
+  const toggleFiltersPanel = () => {
+    setFiltersOpen((current) => {
+      const next = current ? filterGroup.conditions.length > 0 || hasPendingFilterChanges : true;
+      if (next) {
+        setSearchOpen(false);
+        setSortsOpen(false);
+        setGroupByOpen(false);
+      }
+      return next;
+    });
+  };
+
+  const toggleSortsPanel = () => {
+    setSortsOpen((current) => {
+      const next = current ? sortRules.length > 0 || hasPendingSortChanges : true;
+      if (next) {
+        setSearchOpen(false);
+        setFiltersOpen(false);
+        setGroupByOpen(false);
+      }
+      return next;
+    });
+  };
+
+  const openGroupByPanel = () => {
+    setGroupByOpen(true);
+    setSearchOpen(false);
+    setFiltersOpen(false);
+    setSortsOpen(false);
+  };
+
+  const toggleGroupByPanel = () => {
+    setGroupByOpen((current) => {
+      const next = !current;
+      if (next) {
+        setSearchOpen(false);
+        setFiltersOpen(false);
+        setSortsOpen(false);
+      }
+      return next;
+    });
+  };
+
+  const renderToolbarPanel = () => {
+    if (activePanel === "group") {
+      return (
+        <div className="w-full max-w-[620px] rounded-[18px] border border-white/8 bg-[#12110f]/95 p-3 shadow-[0_18px_40px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+          {selectProperties.length === 0 ? (
+            <div className="rounded-[16px] border border-dashed border-white/10 px-4 py-8 text-center text-sm text-zinc-400">
+              Add a Select property to enable board grouping.
+            </div>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {selectProperties.map((property) => {
+                const isActive = property.id === activeBoardGroupProperty?.id;
+
+                return (
+                  <button
+                    key={property.id}
+                    type="button"
+                    onClick={() => setBoardGroupByPropertyId(property.id)}
+                    className={cn(
+                      "rounded-[18px] border px-4 py-3 text-left transition-colors",
+                      isActive
+                        ? "border-sky-500/30 bg-sky-500/12 text-sky-100"
+                        : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+                    )}
+                  >
+                    <div className="text-sm font-medium">{property.name}</div>
+                    <div className="mt-1 text-xs text-zinc-500">
+                      {property.config?.options?.length ?? 0} column
+                      {(property.config?.options?.length ?? 0) === 1 ? "" : "s"}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <div className="database-page min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.08),transparent_28%),linear-gradient(180deg,#151412_0%,#0f0e0d_100%)] text-zinc-100">
@@ -200,178 +1187,154 @@ export function DatabaseView({ page }: DatabaseViewProps) {
 
           <div className="rounded-[26px] border border-white/8 bg-black/20 p-2 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl">
             <div className="flex flex-wrap items-center gap-2 rounded-[20px] border border-white/6 bg-white/[0.03] px-2 py-2">
-              {viewTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setViewType(tab.id)}
-                  className={cn(
-                    "flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-[13px] leading-none transition-colors",
-                    viewType === tab.id
-                      ? "bg-white text-black"
-                      : "text-zinc-400 hover:bg-white/[0.05] hover:text-white"
-                  )}
-                >
-                  {tab.icon}
-                  {tab.label}
-                </button>
-              ))}
-
-              <div className="flex-1" />
-
-              <div className="relative min-w-[220px] flex-1 md:w-[260px] md:flex-none">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
-                <Input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search rows"
-                  className="h-9 rounded-xl border-white/8 bg-white/[0.03] pl-9 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-white/15"
-                />
+              <div className="flex items-center gap-1 rounded-xl border border-white/8 bg-white/[0.02] p-1">
+                {viewTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setViewType(tab.id)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-xl px-3.5 py-2 text-[13px] leading-none transition-colors",
+                      viewType === tab.id
+                        ? "bg-white text-black"
+                        : "text-zinc-400 hover:bg-white/[0.06] hover:text-white"
+                    )}
+                    title={`${tab.label} view`}
+                    aria-label={`${tab.label} view`}
+                  >
+                    <span className="flex h-4 w-4 items-center justify-center">{tab.icon}</span>
+                    <span>{tab.label}</span>
+                  </button>
+                ))}
               </div>
 
-              <div className="flex items-center gap-2">
-                <Filter className="h-3.5 w-3.5 text-zinc-500" />
-                <Select
-                  value={filterPropertyId ?? NONE_VALUE}
-                  onValueChange={(value) => {
-                    setFilterPropertyId(value === NONE_VALUE ? null : value);
-                    setFilterValue("");
-                  }}
+              <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                <ToolbarIconButton
+                  active={filtersOpen || activeFilters.length > 0 || hasPendingFilterChanges}
+                  count={activeFilters.length}
+                  label="Filter rows"
+                  onClick={toggleFiltersPanel}
+                  disabled={!database}
                 >
-                  <SelectTrigger className="h-9 min-w-[150px] rounded-xl border-white/8 bg-white/[0.03] text-zinc-100 focus:ring-white/15">
-                    <SelectValue placeholder="Filter" />
-                  </SelectTrigger>
-                  <SelectContent className="border-white/10 bg-[#191816] text-zinc-100">
-                    <SelectItem value={NONE_VALUE}>No filter</SelectItem>
-                    {properties.map((property) => (
-                      <SelectItem key={property.id} value={property.id}>
-                        {property.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {filterProperty && (
-                supportsOptions(filterProperty.type) ? (
-                  <Select
-                    value={filterValue || NONE_VALUE}
-                    onValueChange={(value) => setFilterValue(value === NONE_VALUE ? "" : value)}
-                  >
-                    <SelectTrigger className="h-9 min-w-[170px] rounded-xl border-white/8 bg-white/[0.03] text-zinc-100 focus:ring-white/15">
-                      <SelectValue placeholder="Filter value" />
-                    </SelectTrigger>
-                    <SelectContent className="border-white/10 bg-[#191816] text-zinc-100">
-                      <SelectItem value={NONE_VALUE}>Any value</SelectItem>
-                      <SelectItem value={EMPTY_FILTER_VALUE}>Empty</SelectItem>
-                      {(filterProperty.config?.options ?? []).map((option) => (
-                        <SelectItem key={option.id} value={option.id}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : filterProperty.type === "checkbox" ? (
-                  <Select
-                    value={filterValue || NONE_VALUE}
-                    onValueChange={(value) => setFilterValue(value === NONE_VALUE ? "" : value)}
-                  >
-                    <SelectTrigger className="h-9 min-w-[150px] rounded-xl border-white/8 bg-white/[0.03] text-zinc-100 focus:ring-white/15">
-                      <SelectValue placeholder="Checked state" />
-                    </SelectTrigger>
-                    <SelectContent className="border-white/10 bg-[#191816] text-zinc-100">
-                      <SelectItem value={NONE_VALUE}>Any value</SelectItem>
-                      <SelectItem value="true">Checked</SelectItem>
-                      <SelectItem value="false">Unchecked</SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
+                  <Filter className="h-4 w-4" />
+                </ToolbarIconButton>
+                <ToolbarIconButton
+                  active={sortsOpen || activeSorts.length > 0 || hasPendingSortChanges}
+                  count={activeSorts.length}
+                  label="Sort rows"
+                  onClick={toggleSortsPanel}
+                  disabled={!database}
+                >
+                  <ArrowUpDown className="h-4 w-4" />
+                </ToolbarIconButton>
+                <ToolbarIconButton
+                  active={showSearchInput}
+                  label="Search rows"
+                  onClick={toggleSearchPanel}
+                  disabled={!database}
+                >
+                  <Search className="h-4 w-4" />
+                </ToolbarIconButton>
+                {showSearchInput && (
                   <Input
-                    value={filterValue}
-                    onChange={(event) => setFilterValue(event.target.value)}
-                    placeholder={`Filter ${filterProperty.name}`}
-                    className="h-9 min-w-[170px] rounded-xl border-white/8 bg-white/[0.03] text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-white/15"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Type to search..."
+                    autoFocus={searchOpen && !searchQuery.trim()}
+                    className="h-9 w-[180px] rounded-xl border-white/8 bg-white/[0.03] text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-white/15 md:w-[240px]"
                   />
-                )
-              )}
+                )}
+                {viewType === "board" && (
+                  <ToolbarIconButton
+                    active={groupByOpen || Boolean(activeBoardGroupProperty)}
+                    label="Group board columns"
+                    onClick={toggleGroupByPanel}
+                    disabled={!database || selectProperties.length === 0}
+                  >
+                    <Rows3 className="h-4 w-4" />
+                  </ToolbarIconButton>
+                )}
+                {hasActiveControls && (
+                  <ToolbarIconButton
+                    label="Clear search, filters, and sorts"
+                    onClick={clearControls}
+                    className="text-zinc-500 hover:text-white"
+                  >
+                    <X className="h-4 w-4" />
+                  </ToolbarIconButton>
+                )}
 
-              <div className="flex items-center gap-2">
-                <ArrowUpDown className="h-3.5 w-3.5 text-zinc-500" />
-                <Select
-                  value={sortPropertyId ?? NONE_VALUE}
-                  onValueChange={(value) => setSortPropertyId(value === NONE_VALUE ? null : value)}
-                >
-                  <SelectTrigger className="h-9 min-w-[150px] rounded-xl border-white/8 bg-white/[0.03] text-zinc-100 focus:ring-white/15">
-                    <SelectValue placeholder="Sort" />
-                  </SelectTrigger>
-                  <SelectContent className="border-white/10 bg-[#191816] text-zinc-100">
-                    <SelectItem value={NONE_VALUE}>No sort</SelectItem>
-                    {properties.map((property) => (
-                      <SelectItem key={property.id} value={property.id}>
-                        {property.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="mx-1 h-8 w-px bg-white/8" />
 
-              {sortPropertyId && (
-                <Select
-                  value={sortDirection}
-                  onValueChange={(value) => setSortDirection(value as "asc" | "desc")}
-                >
-                  <SelectTrigger className="h-9 min-w-[120px] rounded-xl border-white/8 bg-white/[0.03] text-zinc-100 focus:ring-white/15">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="border-white/10 bg-[#191816] text-zinc-100">
-                    <SelectItem value="asc">Ascending</SelectItem>
-                    <SelectItem value="desc">Descending</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
+                <ReminderTriggerButton
+                  workspaceId={page.workspaceId}
+                  iconOnly
+                  label="Create reminder for this database"
+                  title="Create reminder for this database"
+                  className="h-9 w-9 rounded-xl border border-white/8 bg-white/[0.03] text-zinc-400 hover:bg-white/[0.06] hover:text-white"
+                  initialValues={{
+                    title: page.title ? `Review ${page.title}` : "Review database",
+                    pageId: page._id,
+                    databaseId: database?._id ?? null,
+                    sourceLabel: page.title || "Database",
+                    sourceUrl: `/workspace/${page._id}`,
+                  }}
+                />
 
-              {viewType === "board" && selectProperties.length > 0 && (
-                <Select
-                  value={boardGroupByPropertyId ?? selectProperties[0].id}
-                  onValueChange={setBoardGroupByPropertyId}
-                >
-                  <SelectTrigger className="h-9 min-w-[160px] rounded-xl border-white/8 bg-white/[0.03] text-zinc-100 focus:ring-white/15">
-                    <SelectValue placeholder="Group by" />
-                  </SelectTrigger>
-                  <SelectContent className="border-white/10 bg-[#191816] text-zinc-100">
-                    {selectProperties.map((property) => (
-                      <SelectItem key={property.id} value={property.id}>
-                        Group by {property.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-
-              {hasActiveControls && (
                 <Button
                   type="button"
-                  variant="ghost"
                   size="sm"
-                  onClick={clearControls}
-                  className="h-9 rounded-xl text-[13px] font-normal text-zinc-400 hover:bg-white/[0.05] hover:text-white"
+                  onClick={handleQuickAddRow}
+                  disabled={!database || quickAddLoading}
+                  className="h-9 gap-1.5 rounded-xl bg-white px-3 text-[13px] font-medium text-black hover:bg-zinc-200"
                 >
-                  Clear
+                  <Plus className="h-3.5 w-3.5" />
+                  {quickAddLoading ? "Adding..." : "New row"}
                 </Button>
-              )}
-
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleQuickAddRow}
-                disabled={!database || quickAddLoading}
-                className="h-9 gap-1.5 rounded-xl bg-white px-3 text-[13px] font-medium text-black hover:bg-zinc-200"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                {quickAddLoading ? "Adding..." : "New"}
-                <ChevronDown className="h-3.5 w-3.5" />
-              </Button>
+              </div>
             </div>
+
+            <DatabaseQuickFilterBar
+              className="mt-2"
+              properties={properties}
+              filterGroup={filterGroup}
+              open={filtersOpen}
+              hasPendingChanges={hasPendingFilterChanges}
+              onOpenChange={setFiltersOpen}
+              onChange={updateQuickFilterGroup}
+              onReset={handleResetFilters}
+              onSave={handleSaveFilters}
+            />
+
+            <DatabaseQuickSortBar
+              className="mt-2"
+              properties={properties}
+              sortRules={sortRules}
+              open={sortsOpen}
+              hasPendingChanges={hasPendingSortChanges}
+              onOpenChange={setSortsOpen}
+              onChange={updateQuickSortRules}
+              onReset={handleResetSorts}
+              onSave={handleSaveSorts}
+            />
+
+            {activeBoardGroupProperty && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 px-1">
+                <ActiveControlChip
+                  tone="muted"
+                  label={`Group: ${activeBoardGroupProperty.name}`}
+                  onClick={openGroupByPanel}
+                  removable={false}
+                  icon={<Rows3 className="h-3 w-3 text-zinc-500" />}
+                />
+              </div>
+            )}
+
+            {activePanel && (
+              <div className="mt-2 px-1">
+                {renderToolbarPanel()}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -397,24 +1360,48 @@ export function DatabaseView({ page }: DatabaseViewProps) {
 
               {viewType === "table" && (
                 <TableView
-                  database={database}
+                  workspaceId={page.workspaceId}
+                  pageId={page._id}
+                  databaseId={database._id}
+                  databaseName={page.title || database.name}
+                  properties={properties}
                   rows={visibleRows}
                   totalRowCount={rows?.length}
+                  now={formulaNow}
+                  onAddRow={() => handleAddRow()}
+                  onUpdateRow={handleUpdateRow}
+                  onBatchUpdateRows={handleBatchUpdateRows}
+                  onDeleteRow={handleDeleteRow}
+                  onBatchDeleteRows={handleBatchDeleteRows}
+                  onUpdateProperties={handleUpdateProperties}
                 />
               )}
               {viewType === "board" && (
                 <BoardView
-                  database={database}
+                  workspaceId={page.workspaceId}
                   pageId={page._id}
+                  databaseId={database._id}
+                  databaseName={page.title || database.name}
+                  properties={properties}
                   rows={visibleRows}
                   groupByPropertyId={boardGroupByPropertyId}
+                  now={formulaNow}
+                  onAddRow={handleAddRow}
+                  onUpdateRow={handleUpdateRow}
                 />
               )}
               {viewType === "list" && (
                 <ListView
-                  database={database}
+                  workspaceId={page.workspaceId}
                   pageId={page._id}
+                  databaseId={database._id}
+                  databaseName={page.title || database.name}
+                  properties={properties}
                   rows={visibleRows}
+                  now={formulaNow}
+                  onAddRow={() => handleAddRow()}
+                  onUpdateRow={handleUpdateRow}
+                  onDeleteRow={handleDeleteRow}
                 />
               )}
             </>

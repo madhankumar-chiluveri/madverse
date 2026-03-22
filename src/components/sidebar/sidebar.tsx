@@ -20,7 +20,6 @@ import {
   LayoutDashboard,
   Plus,
   Search,
-  Trash2,
   PanelLeftClose,
   PanelLeft,
   MoreHorizontal,
@@ -52,14 +51,13 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { MaddyPanel } from "@/components/maddy/maddy-panel";
 import { CreateSpaceItemModal } from "@/components/modals/create-space-item-modal";
-import { ImportModal } from "@/components/modals/import-modal";
 
 // ── Module Tab ────────────────────────────────────────────────────────────────
 const MODULES = [
   { id: "overview" as const, label: "Overview", icon: LayoutDashboard, href: "/workspace/overview" },
-  { id: "news" as const,     label: "News",      icon: Newspaper,       href: "/workspace/news" },
-  { id: "kb" as const,       label: "Knowledge", icon: BookOpen,        href: "/workspace" },
-  { id: "finance" as const,  label: "Finance",   icon: Wallet,          href: "/workspace/finance" },
+  { id: "feed" as const,     label: "FEED",      icon: Newspaper,       href: "/workspace/feed" },
+  { id: "brain" as const,    label: "BRAIN",     icon: BookOpen,        href: "/workspace/brain" },
+  { id: "ledger" as const,   label: "LEDGER",    icon: Wallet,          href: "/workspace/ledger" },
   { id: "ai" as const,       label: "Maddy AI",  icon: Sparkles,        href: "/workspace/ai" },
 ] as const;
 
@@ -67,16 +65,23 @@ function ModuleTabs() {
   const router = useRouter();
   const pathname = usePathname();
   const { setActiveModule } = useAppStore();
+  const workspaceSegment = pathname.split("/")[2] ?? null;
 
   const active = MODULES.find((m) => {
-    if (m.id === "kb") {
+    if (m.id === "brain") {
       return (
         pathname.startsWith("/workspace") &&
-        !["overview", "news", "finance", "ai"].some((k) => pathname.includes(k))
+        !["overview", "feed", "ledger", "ai"].includes(workspaceSegment ?? "")
       );
     }
-    return pathname.startsWith(m.href);
+    return workspaceSegment === m.id;
   })?.id ?? "overview";
+
+  useEffect(() => {
+    MODULES.forEach((module) => {
+      router.prefetch(module.href);
+    });
+  }, [router]);
 
   return (
     <nav className="flex flex-col gap-1 px-3 py-3 border-b">
@@ -87,7 +92,10 @@ function ModuleTabs() {
           <Link
             key={mod.id}
             href={mod.href}
+            prefetch
             onClick={() => setActiveModule(mod.id)}
+            onMouseEnter={() => router.prefetch(mod.href)}
+            onFocus={() => router.prefetch(mod.href)}
             className={cn(
               "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all min-h-[44px] md:min-h-0",
               "hover:bg-accent/60",
@@ -115,6 +123,8 @@ function PageItem({ page, depth = 0, workspaceId }: PageItemProps) {
   const pathname = usePathname();
   const { toggleExpanded, isExpanded } = useAppStore();
   const expanded = isExpanded(page._id);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const pageHref = `/workspace/${page._id}`;
 
   const createPage = useMutation(api.pages.create);
   const archivePage = useMutation(api.pages.archive);
@@ -124,8 +134,9 @@ function PageItem({ page, depth = 0, workspaceId }: PageItemProps) {
     parentId: page._id,
   });
 
-  const isActive = pathname === `/workspace/${page._id}`;
+  const isActive = pathname === pageHref;
   const hasChildren = children && children.length > 0;
+  const handlePrefetch = () => router.prefetch(pageHref);
 
   const handleCreate = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -148,7 +159,7 @@ function PageItem({ page, depth = 0, workspaceId }: PageItemProps) {
     try {
       await archivePage({ id: page._id });
       toast.success("Page moved to trash");
-      if (isActive) router.push("/workspace");
+      if (isActive) router.push("/workspace/brain");
     } catch {
       toast.error("Failed to archive page");
     }
@@ -165,8 +176,7 @@ function PageItem({ page, depth = 0, workspaceId }: PageItemProps) {
 
   return (
     <div>
-      <Link
-        href={`/workspace/${page._id}`}
+      <div
         className={cn(
           "group flex items-center gap-1 px-2 py-1 rounded-md cursor-pointer select-none text-sm",
           "hover:bg-accent/50 transition-colors",
@@ -195,15 +205,30 @@ function PageItem({ page, depth = 0, workspaceId }: PageItemProps) {
           )}
         </button>
 
-        <span className="text-sm leading-none shrink-0">
-          {page.icon ?? typeIcon}
-        </span>
+        <Link
+          href={pageHref}
+          prefetch
+          className="flex min-w-0 flex-1 items-center gap-1"
+          onMouseEnter={handlePrefetch}
+          onFocus={handlePrefetch}
+        >
+          <span className="text-sm leading-none shrink-0">
+            {page.icon ?? typeIcon}
+          </span>
 
-        <span className="flex-1 truncate text-sm">
-          {page.title || "Untitled"}
-        </span>
+          <span className="flex-1 truncate text-sm">
+            {page.title || "Untitled"}
+          </span>
+        </Link>
 
-        <div className="hidden group-hover:flex items-center gap-0.5 ml-auto">
+        <div
+          className={cn(
+            "ml-auto flex items-center gap-0.5 transition-opacity",
+            menuOpen
+              ? "opacity-100 pointer-events-auto"
+              : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
+          )}
+        >
           <button
             className="w-5 h-5 flex items-center justify-center rounded hover:bg-accent"
             onClick={handleCreate}
@@ -211,16 +236,19 @@ function PageItem({ page, depth = 0, workspaceId }: PageItemProps) {
           >
             <Plus className="w-3 h-3 text-muted-foreground" />
           </button>
-          <DropdownMenu>
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
             <DropdownMenuTrigger asChild>
               <button
                 className="w-5 h-5 flex items-center justify-center rounded hover:bg-accent"
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
               >
                 <MoreHorizontal className="w-3 h-3 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
+            <DropdownMenuContent side="bottom" align="end" sideOffset={6} className="w-48">
               <DropdownMenuItem onClick={() => router.push(`/workspace/${page._id}`)}>
                 <FileText className="w-4 h-4 mr-2" /> Open page
               </DropdownMenuItem>
@@ -234,7 +262,7 @@ function PageItem({ page, depth = 0, workspaceId }: PageItemProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </Link>
+      </div>
 
       {expanded && hasChildren && (
         <div>
@@ -286,18 +314,22 @@ function SpaceSection({ space, workspaceId, onAddNew }: SpaceSectionProps) {
   });
 
   const expandKey = `space:${space._id}`;
+  const spaceHref = `/workspace/${space._id}`;
   const expanded = isExpanded(expandKey);
-  const isHomeActive = pathname === `/workspace/${space._id}`;
+  const isHomeActive = pathname === spaceHref;
+  const handlePrefetch = () => router.prefetch(spaceHref);
 
   useEffect(() => {
-    setExpanded(expandKey, true);
-  }, [expandKey, setExpanded]);
+    if (!expanded) {
+      setExpanded(expandKey, true);
+    }
+  }, [expandKey, expanded, setExpanded]);
 
   const handleArchive = async () => {
     try {
       await archivePage({ id: space._id });
       toast.success("Space moved to trash");
-      if (isHomeActive) router.push("/workspace");
+      if (isHomeActive) router.push("/workspace/brain");
     } catch {
       toast.error("Failed to archive space");
     }
@@ -322,7 +354,9 @@ function SpaceSection({ space, workspaceId, onAddNew }: SpaceSectionProps) {
 
         <button
           className="flex-1 truncate text-left text-sm font-medium text-foreground"
-          onClick={() => router.push(`/workspace/${space._id}`)}
+          onClick={() => router.push(spaceHref)}
+          onMouseEnter={handlePrefetch}
+          onFocus={handlePrefetch}
         >
           {space.title}
         </button>
@@ -354,11 +388,14 @@ function SpaceSection({ space, workspaceId, onAddNew }: SpaceSectionProps) {
       {expanded && (
         <div className="pb-2">
           <Link
-            href={`/workspace/${space._id}`}
+            href={spaceHref}
+            prefetch
             className={cn(
               "mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent/40",
               isHomeActive && "bg-accent text-accent-foreground"
             )}
+            onMouseEnter={handlePrefetch}
+            onFocus={handlePrefetch}
           >
             <Home className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="truncate">Space Home</span>
@@ -398,10 +435,8 @@ function SpaceSection({ space, workspaceId, onAddNew }: SpaceSectionProps) {
 
 function KBSidebarContent({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
   const router = useRouter();
-  const pathname = usePathname();
   const { setCommandPaletteOpen } = useAppStore();
   const [maddyOpen, setMaddyOpen] = useState(false);
-  const [importModalOpen, setImportModalOpen] = useState(false);
   const [createSpaceOpen, setCreateSpaceOpen] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState("");
   const [newSpaceLoading, setNewSpaceLoading] = useState(false);
@@ -559,38 +594,6 @@ function KBSidebarContent({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
         </div>
       </div>
 
-      <div className="px-2 pb-2 border-t pt-2 space-y-0.5">
-        <NavItem
-          icon={<Trash2 className="w-4 h-4" />}
-          label="Trash"
-          active={pathname === "/workspace/trash"}
-          onClick={() => router.push("/workspace/trash")}
-        />
-        <div className="grid grid-cols-3 gap-1">
-          <button
-            className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-sm hover:bg-accent/50 transition-colors min-h-[36px] bg-muted/30"
-            onClick={() => handleOpenCreateItem(null, "General")}
-          >
-            <Plus className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="text-muted-foreground text-xs font-medium">New</span>
-          </button>
-          <button
-            className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-sm hover:bg-accent/50 transition-colors min-h-[36px] bg-muted/30"
-            onClick={() => setCreateSpaceOpen(true)}
-          >
-            <FolderOpen className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="text-muted-foreground text-xs font-medium">Space</span>
-          </button>
-          <button
-            className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-sm hover:bg-accent/50 transition-colors min-h-[36px] bg-muted/30"
-            onClick={() => setImportModalOpen(true)}
-          >
-            <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="text-muted-foreground text-xs font-medium">Import</span>
-          </button>
-        </div>
-      </div>
-
       <Dialog open={createSpaceOpen} onOpenChange={setCreateSpaceOpen}>
         <DialogContent
           title="Create space"
@@ -640,12 +643,6 @@ function KBSidebarContent({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
         parentId={createItemParentId}
         spaceLabel={createItemSpaceLabel}
       />
-
-      <ImportModal 
-        open={importModalOpen} 
-        onClose={() => setImportModalOpen(false)} 
-        workspaceId={workspaceId} 
-      />
       <MaddyPanel open={maddyOpen} onClose={() => setMaddyOpen(false)} />
     </>
   );
@@ -665,7 +662,6 @@ function ModulePlaceholderNav({ title, description }: { title: string; descripti
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
-  const router = useRouter();
   const pathname = usePathname();
   const {
     currentWorkspaceId,
@@ -676,6 +672,7 @@ export function Sidebar() {
     setCommandPaletteOpen,
     setQuickCaptureOpen,
   } = useAppStore();
+  const workspaceSegment = pathname.split("/")[2] ?? null;
 
   const workspaces = useQuery(api.workspaces.listWorkspaces);
   const resolvedWorkspaceId =
@@ -684,7 +681,6 @@ export function Sidebar() {
       : workspaces && workspaces.length > 0
         ? workspaces[0]._id
         : null;
-
   useEffect(() => {
     if (!resolvedWorkspaceId || resolvedWorkspaceId === currentWorkspaceId) return;
     setCurrentWorkspaceId(resolvedWorkspaceId);
@@ -721,9 +717,9 @@ export function Sidebar() {
   }
 
   // Determine which sidebar content to show based on pathname
-  const isKB = !["overview", "news", "finance", "ai"].some((m) =>
-    pathname.includes(`/workspace/${m}`)
-  );
+  const isKB =
+    pathname.startsWith("/workspace") &&
+    !["overview", "feed", "ledger", "ai"].includes(workspaceSegment ?? "");
 
   return (
     <div className="hidden md:flex w-60 shrink-0 flex-col h-full border-r bg-sidebar overflow-hidden">
@@ -754,17 +750,17 @@ export function Sidebar() {
       {/* Module-specific sidebar content */}
       {isKB && resolvedWorkspaceId ? (
         <KBSidebarContent workspaceId={resolvedWorkspaceId} />
-      ) : activeModule === "news" ? (
+      ) : activeModule === "feed" ? (
         <div className="flex-1 flex flex-col">
           <ModulePlaceholderNav
-            title="News Feed"
+            title="FEED"
             description="Your personalised AI & productivity news digest"
           />
         </div>
-      ) : activeModule === "finance" ? (
+      ) : activeModule === "ledger" ? (
         <div className="flex-1 flex flex-col">
           <ModulePlaceholderNav
-            title="Finance"
+            title="LEDGER"
             description="Track income, expenses, budgets & investments"
           />
         </div>

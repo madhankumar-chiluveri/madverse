@@ -6,9 +6,9 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { Id } from "../../convex/_generated/dataModel";
 import type { AccentColor, FontFamily, Theme } from "@/types/ui";
 
-type ActiveModule = "overview" | "news" | "kb" | "finance" | "ai";
-type FinanceTab = "dashboard" | "transactions" | "budget" | "investments" | "reports";
-type NewsCategory = "for_you" | "ai_ml" | "tech_it" | "productivity" | "must_know" | "general" | null;
+type ActiveModule = "overview" | "feed" | "brain" | "ledger" | "ai";
+type LedgerTab = "dashboard" | "transactions" | "budget" | "investments" | "reports";
+type FeedCategory = "for_you" | "ai_ml" | "tech_it" | "productivity" | "must_know" | "general" | null;
 
 interface AppState {
   currentWorkspaceId: Id<"workspaces"> | null;
@@ -23,6 +23,9 @@ interface AppState {
 
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (v: boolean) => void;
+
+  reminderCenterOpen: boolean;
+  setReminderCenterOpen: (v: boolean) => void;
 
   quickCaptureOpen: boolean;
   setQuickCaptureOpen: (v: boolean) => void;
@@ -54,11 +57,11 @@ interface AppState {
   stopFocus: () => void;
   setFocusMinutes: (m: number) => void;
 
-  newsCategory: NewsCategory;
-  setNewsCategory: (c: NewsCategory) => void;
+  feedCategory: FeedCategory;
+  setFeedCategory: (c: FeedCategory) => void;
 
-  financeTab: FinanceTab;
-  setFinanceTab: (t: FinanceTab) => void;
+  ledgerTab: LedgerTab;
+  setLedgerTab: (t: LedgerTab) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -76,6 +79,9 @@ export const useAppStore = create<AppState>()(
 
       commandPaletteOpen: false,
       setCommandPaletteOpen: (v) => set({ commandPaletteOpen: v }),
+
+      reminderCenterOpen: false,
+      setReminderCenterOpen: (v) => set({ reminderCenterOpen: v }),
 
       quickCaptureOpen: false,
       setQuickCaptureOpen: (v) => set({ quickCaptureOpen: v }),
@@ -124,14 +130,37 @@ export const useAppStore = create<AppState>()(
       stopFocus: () => set({ focusActive: false, focusStartedAt: null }),
       setFocusMinutes: (m) => set({ focusMinutes: m }),
 
-      newsCategory: null,
-      setNewsCategory: (c) => set({ newsCategory: c }),
+      feedCategory: null,
+      setFeedCategory: (c) => set({ feedCategory: c }),
 
-      financeTab: "dashboard",
-      setFinanceTab: (t) => set({ financeTab: t }),
+      ledgerTab: "dashboard",
+      setLedgerTab: (t) => set({ ledgerTab: t }),
     }),
     {
       name: "madverse-app-state",
+      version: 2,
+      migrate: (persistedState: any) => {
+        if (!persistedState || typeof persistedState !== "object") {
+          return persistedState;
+        }
+
+        const state = persistedState as Record<string, unknown>;
+        const activeModule =
+          state.activeModule === "news"
+            ? "feed"
+            : state.activeModule === "finance"
+              ? "ledger"
+              : state.activeModule === "kb"
+                ? "brain"
+                : state.activeModule;
+
+        return {
+          ...state,
+          activeModule,
+          feedCategory: state.feedCategory ?? state.newsCategory ?? null,
+          ledgerTab: state.ledgerTab ?? state.financeTab ?? "dashboard",
+        };
+      },
       storage: createJSONStorage(() =>
         typeof window !== "undefined" ? localStorage : ({} as Storage)
       ),
@@ -147,8 +176,8 @@ export const useAppStore = create<AppState>()(
         recentPageIds: s.recentPageIds,
         expandedPageIds: s.expandedPageIds,
         focusMinutes: s.focusMinutes,
-        newsCategory: s.newsCategory,
-        financeTab: s.financeTab,
+        feedCategory: s.feedCategory,
+        ledgerTab: s.ledgerTab,
       }),
     }
   )

@@ -1,36 +1,40 @@
 "use client";
 
-import { useMutation } from "convex/react";
 import { Plus, Trash2 } from "lucide-react";
 
-import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { normalizeValueForProperty, getDefaultValueForProperty, normalizeProperties } from "./database-utils";
+import { ReminderTriggerButton } from "@/components/reminders/reminder-trigger-button";
+import type { PropertySchema } from "@/types/database";
+import { normalizeValueForProperty } from "./database-utils";
 import { PropertyCell } from "./property-cell";
 
 interface ListViewProps {
-  database: any;
+  workspaceId: Id<"workspaces">;
   pageId: Id<"pages">;
+  databaseId: Id<"databases">;
+  databaseName: string;
+  properties: PropertySchema[];
   rows: any[] | undefined;
+  now?: number;
+  onAddRow: () => Promise<void>;
+  onUpdateRow: (rowId: Id<"rows">, data: Record<string, unknown>) => Promise<void>;
+  onDeleteRow: (rowId: Id<"rows">) => Promise<void>;
 }
 
-export function ListView({ database, rows }: ListViewProps) {
-  const addRow = useMutation(api.databases.addRow);
-  const updateRow = useMutation(api.databases.updateRow);
-  const deleteRow = useMutation(api.databases.deleteRow);
-
-  const properties = normalizeProperties(database.properties ?? []);
+export function ListView({
+  workspaceId,
+  pageId,
+  databaseId,
+  databaseName,
+  properties,
+  rows,
+  now,
+  onAddRow,
+  onUpdateRow,
+  onDeleteRow,
+}: ListViewProps) {
   const titleProperty = properties.find((property) => property.type === "title");
   const secondaryProperties = properties.filter((property) => property.type !== "title");
-
-  const handleAddRow = async () => {
-    const initialData: Record<string, unknown> = {};
-    for (const property of properties) {
-      initialData[property.id] = getDefaultValueForProperty(property);
-    }
-
-    await addRow({ databaseId: database._id, data: initialData });
-  };
 
   return (
     <div className="space-y-2 pt-2">
@@ -53,14 +57,14 @@ export function ListView({ database, rows }: ListViewProps) {
                     property={titleProperty}
                     value={row.data?.[titleProperty.id]}
                     rowCreatedAt={row._creationTime}
+                    rowData={row.data}
+                    allProperties={properties}
+                    now={now}
                     fullWidth
                     onChange={(nextValue) =>
-                      updateRow({
-                        id: row._id,
-                        data: {
-                          ...row.data,
-                          [titleProperty.id]: normalizeValueForProperty(titleProperty, nextValue),
-                        },
+                      onUpdateRow(row._id, {
+                        ...row.data,
+                        [titleProperty.id]: normalizeValueForProperty(titleProperty, nextValue),
                       })
                     }
                   />
@@ -69,14 +73,34 @@ export function ListView({ database, rows }: ListViewProps) {
                 )}
               </div>
 
-              <button
-                type="button"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 opacity-0 transition hover:bg-red-500/12 hover:text-red-300 group-hover:opacity-100"
-                onClick={() => deleteRow({ id: row._id })}
-                aria-label="Delete row"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <ReminderTriggerButton
+                  workspaceId={workspaceId}
+                  iconOnly
+                  title="Create reminder from item"
+                  className="opacity-0 group-hover:opacity-100"
+                  initialValues={{
+                    title: `Follow up: ${
+                      titleProperty ? String(row.data?.[titleProperty.id] ?? "Untitled row") : "Untitled row"
+                    }`,
+                    pageId,
+                    databaseId,
+                    rowId: row._id,
+                    sourceLabel: `${databaseName} / ${
+                      titleProperty ? String(row.data?.[titleProperty.id] ?? "Untitled row") : "Untitled row"
+                    }`,
+                    sourceUrl: `/workspace/${pageId}`,
+                  }}
+                />
+                <button
+                  type="button"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 opacity-0 transition hover:bg-red-500/12 hover:text-red-300 group-hover:opacity-100"
+                  onClick={() => onDeleteRow(row._id)}
+                  aria-label="Delete row"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             {secondaryProperties.length > 0 && (
@@ -93,14 +117,14 @@ export function ListView({ database, rows }: ListViewProps) {
                       property={property}
                       value={row.data?.[property.id]}
                       rowCreatedAt={row._creationTime}
+                      rowData={row.data}
+                      allProperties={properties}
+                      now={now}
                       fullWidth
                       onChange={(nextValue) =>
-                        updateRow({
-                          id: row._id,
-                          data: {
-                            ...row.data,
-                            [property.id]: normalizeValueForProperty(property, nextValue),
-                          },
+                        onUpdateRow(row._id, {
+                          ...row.data,
+                          [property.id]: normalizeValueForProperty(property, nextValue),
                         })
                       }
                     />
@@ -115,7 +139,7 @@ export function ListView({ database, rows }: ListViewProps) {
       <button
         type="button"
         className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-zinc-100"
-        onClick={handleAddRow}
+        onClick={() => onAddRow()}
       >
         <Plus className="h-3.5 w-3.5" />
         New item

@@ -24,7 +24,7 @@ const AGENT_MODES = [
   { id: "general", label: "General", icon: Sparkles },
   { id: "research", label: "Research", icon: Brain },
   { id: "code", label: "Code", icon: Code },
-  { id: "finance", label: "Finance", icon: BarChart2 },
+  { id: "ledger", label: "Ledger", icon: BarChart2 },
 ] as const;
 
 // ── Chat message bubble ───────────────────────────────────────────────────────

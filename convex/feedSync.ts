@@ -1,8 +1,8 @@
 import { action } from "./_generated/server";
 import { api } from "./_generated/api";
 
-// This action fetches news from GNews, passes it to Gemini, and stores it in Convex.
-export const fetchAndProcessNews = action({
+// This action fetches FEED stories from GNews, passes them to Gemini, and stores them in Convex.
+export const fetchAndProcessFeed = action({
   args: {},
   handler: async (ctx) => {
     // 1. Fetch API Keys from environment variables
@@ -10,12 +10,12 @@ export const fetchAndProcessNews = action({
     const geminiApiKey = process.env.GEMINI_API_KEY;
 
     if (!gnewsApiKey || !geminiApiKey) {
-      console.warn("newsSync: Missing GNEWS_API_KEY or GEMINI_API_KEY. Skipping news sync.");
+      console.warn("feedSync: Missing GNEWS_API_KEY or GEMINI_API_KEY. Skipping FEED sync.");
       return { success: false, reason: "Missing API keys" };
     }
 
     try {
-      // 2. Fetch specific news from GNews (e.g., technology, business, or general top headlines)
+      // 2. Fetch specific stories from GNews (e.g., technology, business, or general top headlines)
       // Limit to max 10 to avoid burning through the free tier too fast in one go
       const gnewsUrl = `https://gnews.io/api/v4/top-headlines?category=technology&lang=en&max=10&apikey=${gnewsApiKey}`;
       const response = await fetch(gnewsUrl);
@@ -35,7 +35,7 @@ export const fetchAndProcessNews = action({
         
         // Prepare prompt for Gemini to structure our data
         const prompt = `
-You are an expert AI news editor for a professional workspace app. Analyze the following news article and extract structured data.
+You are an expert AI FEED editor for a professional workspace app. Analyze the following article and extract structured data.
 Title: ${article.title}
 Description: ${article.description}
 Content Snippet: ${article.content}
@@ -90,7 +90,7 @@ Return a raw JSON object (DO NOT wrap in markdown code blocks like \`\`\`json) m
         const category = validCategories.includes(enrichedData.category) ? enrichedData.category : "tech_it";
         const sentiment = validSentiments.includes(enrichedData.sentiment) ? enrichedData.sentiment : "neutral";
 
-        await ctx.runMutation(api.news.insertArticle, {
+        await ctx.runMutation(api.feed.insertArticle, {
           title: article.title,
           source: article.source.name,
           url: article.url,
@@ -113,7 +113,7 @@ Return a raw JSON object (DO NOT wrap in markdown code blocks like \`\`\`json) m
 
       return { success: true, processed: processedCount };
     } catch (error) {
-      console.error("Error in fetchAndProcessNews:", error);
+      console.error("Error in fetchAndProcessFeed:", error);
       return { success: false, error: String(error) };
     }
   },

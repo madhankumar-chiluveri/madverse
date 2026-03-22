@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useConvexAuth } from "convex/react";
 import { useRouter } from "next/navigation";
+import { AppIcon } from "@/components/ui/app-icon";
 
 export default function RootPage() {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -11,7 +12,7 @@ export default function RootPage() {
   useEffect(() => {
     if (!isLoading) {
       if (isAuthenticated) {
-        router.replace("/workspace");
+        router.replace("/workspace/brain");
       } else {
         router.replace("/login");
       }
@@ -21,7 +22,7 @@ export default function RootPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-4">
-        <img src="/app-icon.png" alt="MADVERSE" className="w-14 h-14 rounded-2xl animate-pulse" />
+        <AppIcon variant="loader" className="w-14 h-14" />
         <p className="text-muted-foreground text-sm">Loading MADVERSE…</p>
       </div>
     </div>

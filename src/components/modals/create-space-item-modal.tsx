@@ -292,6 +292,7 @@ export function CreateSpaceItemModal({
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent
         title="Add item"
+        hideTitleVisually
         className="max-w-5xl border-white/10 bg-[#161513] p-0 text-zinc-100 sm:rounded-[28px]"
       >
         <div className="max-h-[85vh] overflow-y-auto p-6">

@@ -5,6 +5,7 @@ import { Id } from "../../convex/_generated/dataModel";
 
 export type PropertyType =
   | "title"
+  | "id"
   | "text"
   | "number"
   | "select"
@@ -26,6 +27,15 @@ export interface SelectOption {
   color: string;
 }
 
+export type FormulaResultType = "text" | "number" | "date";
+export type FormulaDisplayStyle = "auto" | "plain" | "badge";
+
+export interface FormulaConfig {
+  expression?: string;
+  resultType?: FormulaResultType;
+  displayStyle?: FormulaDisplayStyle;
+}
+
 export interface PropertyConfig {
   options?: SelectOption[];
   format?: string;
@@ -33,7 +43,9 @@ export interface PropertyConfig {
   wrap?: boolean;
   frozen?: boolean;
   showPageIcon?: boolean;
+  nextId?: number;
   relation?: { databaseId: Id<"databases"> };
+  formula?: FormulaConfig;
 }
 
 export interface PropertySchema {
@@ -55,9 +67,21 @@ export interface Database {
 
 export type ViewType = "table" | "board" | "list" | "calendar" | "gallery" | "timeline";
 
+export type FilterOperator =
+  | "contains"
+  | "does_not_contain"
+  | "is"
+  | "is_not"
+  | "is_empty"
+  | "is_not_empty"
+  | "greater_than"
+  | "greater_than_or_equal"
+  | "less_than"
+  | "less_than_or_equal";
+
 export interface FilterCondition {
   propertyId: string;
-  operator: string;
+  operator: FilterOperator;
   value: unknown;
 }
 

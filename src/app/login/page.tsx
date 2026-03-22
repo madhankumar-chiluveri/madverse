@@ -33,7 +33,7 @@ export default function LoginPage() {
       }
       setRedirecting(true);
       // Use replace to prevent going back to login
-      router.replace("/workspace");
+      router.replace("/workspace/brain");
     } catch (err: any) {
       const message = err?.message ?? "";
       if (message.includes("reading 'redirect'")) {
@@ -55,11 +55,11 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative z-10 text-white text-center">
           <div className="flex items-center justify-center gap-3 mb-6">
-            <img src="/app-icon.png" alt="MADVERSE" className="w-12 h-12 rounded-2xl" />
+            <img src="/app-icon.svg" alt="MADVERSE" className="w-12 h-12 rounded-2xl" />
             <h1 className="text-4xl font-bold tracking-tight">MADVERSE</h1>
           </div>
           <p className="text-xl text-white/80 font-medium mb-8">
-            AI-Powered Personal Knowledge OS
+            AI-Powered Personal BRAIN OS
           </p>
           <div className="space-y-4 text-white/70 text-sm max-w-sm mx-auto">
             <div className="flex items-center gap-3 bg-white/10 rounded-lg px-4 py-3 backdrop-blur">
@@ -90,7 +90,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <img src="/app-icon.png" alt="MADVERSE" className="w-8 h-8 rounded-lg" />
+            <img src="/app-icon.svg" alt="MADVERSE" className="w-8 h-8 rounded-lg" />
             <span className="text-xl font-bold">MADVERSE</span>
           </div>
 
@@ -99,7 +99,7 @@ export default function LoginPage() {
           </h2>
           <p className="text-muted-foreground text-sm mb-8">
             {step === "signIn"
-              ? "Sign in to your knowledge OS"
+              ? "Sign in to your BRAIN OS"
               : "Start building your second brain"}
           </p>
 
@@ -194,7 +194,7 @@ export default function LoginPage() {
       {redirecting && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
-            <AppIcon className="w-12 h-12 animate-pulse" />
+            <AppIcon variant="loader" className="w-12 h-12" />
             <p className="text-sm font-medium">Redirecting to workspace...</p>
           </div>
         </div>

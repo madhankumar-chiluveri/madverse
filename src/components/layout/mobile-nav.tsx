@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -14,9 +15,9 @@ import {
 
 const TABS = [
   { id: "overview" as const, label: "Overview", icon: LayoutDashboard, href: "/workspace/overview" },
-  { id: "news" as const,     label: "News",     icon: Newspaper,        href: "/workspace/news" },
-  { id: "kb" as const,       label: "Knowledge",icon: BookOpen,         href: "/workspace" },
-  { id: "finance" as const,  label: "Finance",  icon: Wallet,           href: "/workspace/finance" },
+  { id: "feed" as const,     label: "FEED",     icon: Newspaper,        href: "/workspace/feed" },
+  { id: "brain" as const,    label: "BRAIN",    icon: BookOpen,         href: "/workspace/brain" },
+  { id: "ledger" as const,   label: "LEDGER",   icon: Wallet,           href: "/workspace/ledger" },
   { id: "ai" as const,       label: "Maddy AI", icon: Sparkles,         href: "/workspace/ai" },
 ] as const;
 
@@ -24,11 +25,20 @@ export function MobileNav() {
   const router = useRouter();
   const pathname = usePathname();
   const { setActiveModule } = useAppStore();
+  const workspaceSegment = pathname.split("/")[2] ?? null;
 
   const active = TABS.find((t) => {
-    if (t.id === "kb") return pathname.startsWith("/workspace") && !["overview","news","finance","ai"].some(m => pathname.includes(m));
-    return pathname.startsWith(t.href);
+    if (t.id === "brain") {
+      return pathname.startsWith("/workspace") && !["overview", "feed", "ledger", "ai"].includes(workspaceSegment ?? "");
+    }
+    return workspaceSegment === t.id;
   })?.id ?? "overview";
+
+  useEffect(() => {
+    TABS.forEach((tab) => {
+      router.prefetch(tab.href);
+    });
+  }, [router]);
 
   return (
     <nav
@@ -44,6 +54,7 @@ export function MobileNav() {
           <Link
             key={tab.id}
             href={tab.href}
+            prefetch
             className={cn(
               "relative flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 min-h-[56px] transition-colors",
               "active:scale-95 transition-transform",
@@ -52,6 +63,7 @@ export function MobileNav() {
                 : "text-muted-foreground hover:text-foreground"
             )}
             onClick={() => setActiveModule(tab.id)}
+            onTouchStart={() => router.prefetch(tab.href)}
             aria-label={tab.label}
             aria-current={isActive ? "page" : undefined}
           >

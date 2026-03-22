@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Check, ChevronDown, FileText, Link2, Mail, Phone } from "lucide-react";
+import { CalendarDays, Check, ChevronDown, FileText, Link2, Mail, Phone, Sigma } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -10,13 +10,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PremiumDateTimePicker } from "@/components/ui/premium-date-time-picker";
 import { cn } from "@/lib/utils";
 import type { PropertySchema } from "@/types/database";
 import {
+  getFormulaBadgeClasses,
   getPropertyOption,
   getPropertyOptionList,
+  getPropertyValueAsText,
+  getResolvedPropertyValue,
   getSelectColorClasses,
   normalizeValueForProperty,
+  shouldRenderFormulaAsBadge,
 } from "./database-utils";
 
 interface PropertyCellProps {
@@ -25,17 +30,9 @@ interface PropertyCellProps {
   onChange: (value: unknown) => void;
   fullWidth?: boolean;
   rowCreatedAt?: number;
-}
-
-function toDateInputValue(rawValue: unknown) {
-  if (rawValue === null || rawValue === undefined || rawValue === "") {
-    return "";
-  }
-
-  const date = new Date(Number(rawValue));
-  if (Number.isNaN(date.getTime())) return "";
-
-  return date.toISOString().split("T")[0];
+  rowData?: Record<string, unknown>;
+  allProperties?: PropertySchema[];
+  now?: number;
 }
 
 function formatDateValue(rawValue: unknown) {
@@ -76,12 +73,25 @@ export function PropertyCell({
   onChange,
   fullWidth = false,
   rowCreatedAt,
+  rowData,
+  allProperties,
+  now,
 }: PropertyCellProps) {
   const [editing, setEditing] = useState(false);
   const [localValue, setLocalValue] = useState(value ?? "");
   const fieldWidthClass = fullWidth ? "w-full" : "min-w-[140px] max-w-[280px]";
   const displayWidthClass = fullWidth ? "w-full" : "max-w-[280px]";
   const wrapDisplay = property.config?.wrap ? "whitespace-normal break-words" : "truncate";
+  const resolvedValue = useMemo(
+    () =>
+      getResolvedPropertyValue(property, value, {
+        rowData,
+        properties: allProperties,
+        rowCreatedAt,
+        now,
+      }),
+    [allProperties, now, property, rowCreatedAt, rowData, value]
+  );
 
   useEffect(() => {
     if (!editing) {
@@ -89,10 +99,16 @@ export function PropertyCell({
     }
   }, [value, editing]);
 
-  const formattedDate = useMemo(() => formatDateValue(value), [value]);
-  const createdTimeValue = useMemo(
-    () => formatDateTimeValue(rowCreatedAt ?? value),
-    [rowCreatedAt, value]
+  const createdTimeValue = useMemo(() => formatDateTimeValue(resolvedValue), [resolvedValue]);
+  const formulaTextValue = useMemo(
+    () =>
+      getPropertyValueAsText(property, value, {
+        rowData,
+        properties: allProperties,
+        rowCreatedAt,
+        now,
+      }),
+    [allProperties, now, property, rowCreatedAt, rowData, value]
   );
 
   const commitTextLike = () => {
@@ -100,12 +116,23 @@ export function PropertyCell({
     onChange(normalizeValueForProperty(property, localValue));
   };
 
-  const commitDate = () => {
-    setEditing(false);
-    onChange(normalizeValueForProperty(property, localValue));
-  };
-
   switch (property.type) {
+    case "id":
+      return (
+        <div
+          className={cn(
+            "flex min-h-[38px] items-center justify-end rounded-lg px-2.5 py-1.5 text-right text-[13px]",
+            displayWidthClass
+          )}
+        >
+          {resolvedValue === null || resolvedValue === undefined || resolvedValue === "" ? (
+            <span className="text-zinc-500">Auto</span>
+          ) : (
+            <span className="font-medium tabular-nums text-zinc-300">{String(resolvedValue)}</span>
+          )}
+        </div>
+      );
+
     case "title":
     case "text":
     case "email":
@@ -113,16 +140,16 @@ export function PropertyCell({
     case "url": {
       const href =
         property.type === "email"
-          ? value
-            ? `mailto:${String(value)}`
+          ? resolvedValue
+            ? `mailto:${String(resolvedValue)}`
             : null
           : property.type === "phone"
-            ? value
-              ? `tel:${String(value)}`
+            ? resolvedValue
+              ? `tel:${String(resolvedValue)}`
               : null
             : property.type === "url"
-              ? value
-                ? String(value)
+              ? resolvedValue
+                ? String(resolvedValue)
                 : null
               : null;
 
@@ -178,7 +205,7 @@ export function PropertyCell({
         >
           <div className="flex min-w-0 items-center gap-1.5">
             {prefixIcon}
-            {href && value ? (
+            {href && resolvedValue ? (
               <a
                 href={href}
                 target={property.type === "url" ? "_blank" : undefined}
@@ -189,7 +216,7 @@ export function PropertyCell({
                 )}
                 onClick={(event) => event.stopPropagation()}
               >
-                {String(value)}
+                {String(resolvedValue)}
               </a>
             ) : (
               <span
@@ -197,10 +224,10 @@ export function PropertyCell({
                   "max-w-full",
                   wrapDisplay,
                   property.type === "title" ? "font-medium text-zinc-100" : "text-zinc-200",
-                  !value && "font-normal text-zinc-500"
+                  !resolvedValue && "font-normal text-zinc-500"
                 )}
               >
-                {value ? String(value) : property.type === "title" ? "Untitled" : "Empty"}
+                {resolvedValue ? String(resolvedValue) : property.type === "title" ? "Untitled" : "Empty"}
               </span>
             )}
           </div>
@@ -240,16 +267,16 @@ export function PropertyCell({
             setEditing(true);
           }}
         >
-          {value === null || value === undefined || value === "" ? (
+          {resolvedValue === null || resolvedValue === undefined || resolvedValue === "" ? (
             <span className="text-zinc-500">Empty</span>
           ) : (
-            <span className="text-zinc-100">{Number(value).toLocaleString()}</span>
+            <span className="text-zinc-100">{Number(resolvedValue).toLocaleString()}</span>
           )}
         </button>
       );
 
     case "select": {
-      const selected = getPropertyOption(property, value);
+      const selected = getPropertyOption(property, resolvedValue);
 
       return (
         <DropdownMenu>
@@ -281,10 +308,7 @@ export function PropertyCell({
             align="start"
             className="w-[220px] border-white/10 bg-[#191816] text-zinc-100"
           >
-            <DropdownMenuItem
-              className="focus:bg-white/[0.06]"
-              onSelect={() => onChange(null)}
-            >
+            <DropdownMenuItem className="focus:bg-white/[0.06]" onSelect={() => onChange(null)}>
               Clear
             </DropdownMenuItem>
 
@@ -317,7 +341,7 @@ export function PropertyCell({
     }
 
     case "multi_select": {
-      const selectedOptions = getPropertyOptionList(property, value);
+      const selectedOptions = getPropertyOptionList(property, resolvedValue);
       const selectedIds = new Set(selectedOptions.map((option) => option.id));
 
       return (
@@ -389,10 +413,7 @@ export function PropertyCell({
               ))
             )}
 
-            <DropdownMenuItem
-              className="focus:bg-white/[0.06]"
-              onSelect={() => onChange([])}
-            >
+            <DropdownMenuItem className="focus:bg-white/[0.06]" onSelect={() => onChange([])}>
               Clear all
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -405,7 +426,7 @@ export function PropertyCell({
         <label className={cn("flex min-h-[38px] items-center px-2.5", displayWidthClass)}>
           <input
             type="checkbox"
-            checked={Boolean(value)}
+            checked={Boolean(resolvedValue)}
             onChange={(event) => onChange(event.target.checked)}
             className="h-4 w-4 cursor-pointer rounded border-white/15 bg-white/[0.04] accent-white"
           />
@@ -413,44 +434,16 @@ export function PropertyCell({
       );
 
     case "date":
-      return editing ? (
-        <input
-          type="date"
-          value={String(localValue ?? "")}
-          onChange={(event) => setLocalValue(event.target.value)}
-          onBlur={commitDate}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") commitDate();
-            if (event.key === "Escape") {
-              setLocalValue(toDateInputValue(value));
-              setEditing(false);
-            }
-          }}
-          className={cn(
-            "my-1 h-8 rounded-lg border border-white/10 bg-white/[0.05] px-2.5 text-[13px] text-zinc-100 shadow-sm outline-none ring-0 focus:border-white/15 focus:ring-1 focus:ring-white/10",
-            fieldWidthClass
-          )}
-          autoFocus
+      return (
+        <PremiumDateTimePicker
+          value={typeof resolvedValue === "number" ? resolvedValue : null}
+          onChange={(nextValue) => onChange(normalizeValueForProperty(property, nextValue))}
+          mode="date"
+          variant="cell"
+          placeholder="Empty"
+          className={cn(displayWidthClass, fullWidth && "w-full")}
+          popoverClassName="w-[320px]"
         />
-      ) : (
-        <button
-          type="button"
-          className={cn(
-            "flex min-h-[38px] items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors hover:bg-white/[0.05]",
-            displayWidthClass
-          )}
-          onClick={() => {
-            setLocalValue(toDateInputValue(value));
-            setEditing(true);
-          }}
-        >
-          <CalendarDays className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-          {formattedDate ? (
-            <span className="text-zinc-100">{formattedDate}</span>
-          ) : (
-            <span className="text-zinc-500">Empty</span>
-          )}
-        </button>
       );
 
     case "created_time":
@@ -470,6 +463,48 @@ export function PropertyCell({
         </div>
       );
 
+    case "formula": {
+      const resultType = property.config?.formula?.resultType ?? "text";
+      const displayText =
+        resultType === "number"
+          ? resolvedValue === null || resolvedValue === undefined || resolvedValue === ""
+            ? ""
+            : Number(resolvedValue).toLocaleString()
+          : resultType === "date"
+            ? formatDateValue(resolvedValue)
+            : formulaTextValue;
+      const showBadge = shouldRenderFormulaAsBadge(property, resolvedValue);
+
+      return (
+        <div
+          className={cn(
+            "flex min-h-[38px] items-center rounded-lg px-2.5 py-1.5 text-[13px]",
+            displayWidthClass
+          )}
+        >
+          {showBadge ? (
+            <span
+              className={cn(
+                "inline-flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 font-medium",
+                getFormulaBadgeClasses(resolvedValue),
+                fullWidth && "w-full"
+              )}
+            >
+              <Sigma className="h-3.5 w-3.5 shrink-0" />
+              <span className={cn("min-w-0", wrapDisplay)}>{displayText || "Empty"}</span>
+            </span>
+          ) : (
+            <div className="flex min-w-0 items-center gap-2">
+              <Sigma className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+              <span className={cn("max-w-full text-zinc-200", wrapDisplay, !displayText && "text-zinc-500")}>
+                {displayText || "Empty"}
+              </span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     default:
       return (
         <button
@@ -483,8 +518,8 @@ export function PropertyCell({
             setEditing(true);
           }}
         >
-          <span className={cn("max-w-full", wrapDisplay, !value && "text-zinc-500")}>
-            {String(value ?? "") || "Empty"}
+          <span className={cn("max-w-full", wrapDisplay, !resolvedValue && "text-zinc-500")}>
+            {String(resolvedValue ?? "") || "Empty"}
           </span>
         </button>
       );

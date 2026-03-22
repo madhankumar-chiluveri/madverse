@@ -116,6 +116,43 @@ export const deleteRow = mutation({
 
 // ── Views ─────────────────────────────────────────────────────────────────────
 
+export const replaceRows = mutation({
+  args: {
+    databaseId: v.id("databases"),
+    rows: v.array(
+      v.object({
+        data: v.any(),
+        sortOrder: v.number(),
+        pageId: v.optional(v.union(v.id("pages"), v.null())),
+        isArchived: v.optional(v.boolean()),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const existingRows = await ctx.db
+      .query("rows")
+      .withIndex("by_databaseId", (q) => q.eq("databaseId", args.databaseId))
+      .collect();
+
+    for (const row of existingRows) {
+      await ctx.db.delete(row._id);
+    }
+
+    for (const row of args.rows) {
+      await ctx.db.insert("rows", {
+        databaseId: args.databaseId,
+        pageId: row.pageId ?? null,
+        data: row.data,
+        sortOrder: row.sortOrder,
+        isArchived: row.isArchived ?? false,
+      });
+    }
+  },
+});
+
 export const listViews = query({
   args: { databaseId: v.id("databases") },
   handler: async (ctx, args) => {

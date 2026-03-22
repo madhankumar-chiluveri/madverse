@@ -114,7 +114,7 @@ export const createSpace = mutation({
           content: [
             {
               type: "text",
-              text: "Use this space to keep project notes, tasks, databases, and decisions isolated from the rest of your knowledge base.",
+              text: "Use this space to keep project notes, tasks, databases, and decisions isolated from the rest of your BRAIN.",
               styles: {},
             },
           ],

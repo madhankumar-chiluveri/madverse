@@ -7,6 +7,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AppIcon } from "@/components/ui/app-icon";
+import { ReminderTriggerButton } from "@/components/reminders/reminder-trigger-button";
 import { useAppStore } from "@/store/app.store";
 import { cn } from "@/lib/utils";
 import {
@@ -165,6 +166,17 @@ export function PageHeader({ page }: PageHeaderProps) {
               {tagging ? "Tagging…" : "Auto-tag"}
             </button>
           )}
+          <ReminderTriggerButton
+            workspaceId={page.workspaceId}
+            label="Remind me"
+            className="px-2 py-1"
+            initialValues={{
+              title: page.title ? `Review ${page.title}` : "Review page",
+              pageId: page._id,
+              sourceLabel: page.title || "Page",
+              sourceUrl: `/workspace/${page._id}`,
+            }}
+          />
           <button
             className="flex items-center gap-1 px-2 py-1 rounded hover:bg-accent/50 transition-colors"
             onClick={handleFavourite}

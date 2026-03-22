@@ -154,7 +154,7 @@ export function MaddyPanel({ open, onClose }: MaddyPanelProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div className="flex items-center gap-2">
-          <img src="/app-icon.png" alt="MADVERSE" className="w-7 h-7 rounded-lg" />
+          <img src="/app-icon.svg" alt="MADVERSE" className="w-7 h-7 rounded-lg" />
           <span className="font-semibold text-sm">Maddy AI</span>
         </div>
         <button
@@ -254,7 +254,7 @@ export function MaddyPanel({ open, onClose }: MaddyPanelProps) {
             <p className="text-xs text-muted-foreground">
               {tab === "chat"
                 ? "Ask Maddy anything about your notes"
-                : "Search across your knowledge base"}
+                : "Search across your BRAIN"}
             </p>
           </div>
         )}
@@ -275,7 +275,7 @@ export function MaddyPanel({ open, onClose }: MaddyPanelProps) {
               }}
               placeholder={
                 tab === "search"
-                  ? "Search your knowledge base…"
+                  ? "Search your BRAIN…"
                   : "Ask Maddy anything…"
               }
               className="flex-1 min-h-[60px] max-h-[120px] text-sm resize-none"
