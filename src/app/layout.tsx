@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, Roboto_Serif, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
@@ -7,6 +8,24 @@ import { Toaster } from "@/components/ui/sonner";
 import { OfflineBanner } from "@/components/pwa/offline-banner";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 import Script from "next/script";
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
+
+const robotoSerif = Roboto_Serif({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-roboto-serif",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-jetbrains-mono",
+});
 
 export const metadata: Metadata = {
   title: "MadVibe",
@@ -38,7 +57,7 @@ export default function RootLayout({
 }) {
   return (
     <ConvexAuthNextjsServerProvider>
-      <html lang="en" suppressHydrationWarning>
+      <html lang="en" suppressHydrationWarning className={`${inter.variable} ${robotoSerif.variable} ${jetbrainsMono.variable}`}>
         <head>
           <script
             dangerouslySetInnerHTML={{

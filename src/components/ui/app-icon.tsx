@@ -17,7 +17,7 @@ export function AppIcon({
       alt={alt}
       className={cn(
         "shrink-0 rounded-2xl",
-        variant === "loader" ? "object-contain" : "object-cover",
+        "object-contain",
         className
       )}
     />

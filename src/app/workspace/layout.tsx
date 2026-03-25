@@ -1,14 +1,37 @@
 "use client";
 
+import { useEffect } from "react";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar/sidebar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { WorkspaceActionMenu } from "@/components/layout/workspace-action-menu";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { MaddyPanel } from "@/components/maddy/maddy-panel";
-import { ReminderCenter } from "@/components/reminders/reminder-center";
-import { ReminderNotificationBridge } from "@/components/reminders/reminder-notification-bridge";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+
+// Heavy components loaded after first paint — framer-motion, reminder logic, etc.
+const MaddyPanel = dynamic(
+  () => import("@/components/maddy/maddy-panel").then((m) => ({ default: m.MaddyPanel })),
+  { ssr: false }
+);
+const ReminderCenter = dynamic(
+  () => import("@/components/reminders/reminder-center").then((m) => ({ default: m.ReminderCenter })),
+  { ssr: false }
+);
+const ReminderNotificationBridge = dynamic(
+  () => import("@/components/reminders/reminder-notification-bridge").then((m) => ({ default: m.ReminderNotificationBridge })),
+  { ssr: false }
+);
+
+const PREFETCH_ROUTES = [
+  "/workspace/overview",
+  "/workspace/feed",
+  "/workspace/brain",
+  "/workspace/ledger",
+  "/workspace/settings",
+  "/workspace/trash",
+];
 
 export default function WorkspaceLayout({
   children,
@@ -16,6 +39,12 @@ export default function WorkspaceLayout({
   children: React.ReactNode;
 }) {
   const maddyPanelOpen = useAppStore((state) => state.maddyPanelOpen);
+  const router = useRouter();
+
+  // Prefetch all primary routes on mount so navigation feels instant
+  useEffect(() => {
+    PREFETCH_ROUTES.forEach((route) => router.prefetch(route));
+  }, [router]);
 
   return (
     <div className="h-screen flex overflow-hidden bg-background">
@@ -26,7 +55,7 @@ export default function WorkspaceLayout({
       <main className="relative flex-1 overflow-y-auto min-w-0 pb-16 md:pb-0">
         <div
           className={cn(
-            "pointer-events-none fixed right-5 top-4 z-40 hidden items-center justify-end transition-all duration-200 md:flex xl:right-6",
+            "pointer-events-none fixed right-4 top-3 z-40 flex items-center justify-end transition-all duration-200 md:right-5 md:top-4 xl:right-6",
             maddyPanelOpen && "translate-y-1 opacity-0"
           )}
         >

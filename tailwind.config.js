@@ -51,7 +51,7 @@ module.exports = {
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],
         serif: ["var(--font-roboto-serif)", "Georgia", "Cambria", "serif"],
-        mono: ["JetBrains Mono", "Consolas", "monospace"],
+        mono: ["var(--font-jetbrains-mono)", "JetBrains Mono", "Consolas", "monospace"],
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",

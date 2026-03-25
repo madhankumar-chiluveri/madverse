@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
+import Image from "next/image";
 import { useMutation, useAction } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -25,7 +26,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import EmojiPicker from "emoji-picker-react";
+import dynamic from "next/dynamic";
+
+// Lazy-load emoji picker (~80 KB) — only needed when user clicks the icon
+const EmojiPicker = dynamic(() => import("emoji-picker-react"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-[350px] h-[420px] rounded-xl border bg-popover animate-pulse" />
+  ),
+});
 
 interface PageHeaderProps {
   page: any;
@@ -42,7 +51,7 @@ export function PageHeader({ page }: PageHeaderProps) {
   const [tagging, setTagging] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
 
-  const handleTitleSave = async () => {
+  const handleTitleSave = useCallback(async () => {
     setEditing(false);
     if (title !== page.title) {
       try {
@@ -52,42 +61,42 @@ export function PageHeader({ page }: PageHeaderProps) {
         setTitle(page.title);
       }
     }
-  };
+  }, [title, page.title, page._id, updatePage]);
 
-  const handleFavourite = async () => {
+  const handleFavourite = useCallback(async () => {
     try {
       await updatePage({ id: page._id, isFavourite: !page.isFavourite });
     } catch {
       toast.error("Failed to update favourite");
     }
-  };
+  }, [page._id, page.isFavourite, updatePage]);
 
-  const handleFullWidth = async () => {
+  const handleFullWidth = useCallback(async () => {
     try {
       await updatePage({ id: page._id, isFullWidth: !page.isFullWidth });
     } catch {
       toast.error("Failed to update width");
     }
-  };
+  }, [page._id, page.isFullWidth, updatePage]);
 
-  const handleRemoveCover = async () => {
+  const handleRemoveCover = useCallback(async () => {
     await updatePage({ id: page._id, coverImage: null });
-  };
+  }, [page._id, updatePage]);
 
-  const handleEmojiSelect = async (emojiData: any) => {
+  const handleEmojiSelect = useCallback(async (emojiData: any) => {
     setShowEmoji(false);
     try {
       await updatePage({ id: page._id, icon: emojiData.emoji });
     } catch {
       toast.error("Failed to set icon");
     }
-  };
+  }, [page._id, updatePage]);
 
-  const handleRemoveIcon = async () => {
+  const handleRemoveIcon = useCallback(async () => {
     await updatePage({ id: page._id, icon: null });
-  };
+  }, [page._id, updatePage]);
 
-  const handleAutoTag = async () => {
+  const handleAutoTag = useCallback(async () => {
     if (!geminiApiKey) {
       toast.error("Add your Gemini API key in Settings to use Maddy AI");
       return;
@@ -101,17 +110,20 @@ export function PageHeader({ page }: PageHeaderProps) {
     } finally {
       setTagging(false);
     }
-  };
+  }, [geminiApiKey, page._id, tagPage]);
 
   return (
     <div className={cn("relative", page.isFullWidth ? "max-w-none" : "max-w-3xl mx-auto")}>
       {/* Cover image */}
       {page.coverImage && (
         <div className="relative w-full h-48 -mx-8 mb-4 overflow-hidden">
-          <img
+          <Image
             src={page.coverImage}
             alt="cover"
-            className="w-full h-full object-cover"
+            fill
+            sizes="100vw"
+            className="object-cover"
+            priority
           />
           <button
             className="absolute top-2 right-2 bg-black/40 text-white text-xs px-2 py-1 rounded hover:bg-black/60 transition"

@@ -55,17 +55,18 @@
 }
 
 @layer base {
-  * {
-    @apply border-border;
+  *,
+  ::before,
+  ::after {
+    border-color: hsl(var(--border));
   }
 
   body {
     @apply bg-background text-foreground;
   }
 
-  html {
-    scroll-behavior: smooth;
-  }
+  /* Removed global smooth scroll — causes 60fps drops on large scrollable content.
+     Apply scroll-smooth only where explicitly needed via Tailwind class. */
 
   /* Scrollbar styling */
   ::-webkit-scrollbar {

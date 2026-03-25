@@ -3,27 +3,23 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { useAuthActions } from "@convex-dev/auth/react";
 import { useAppStore } from "@/store/app.store";
-import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Loader2, LogOut, Moon, Settings, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
+import { ChevronDown } from "lucide-react";
+import {
+  CreateWorkspaceDialog,
+  WorkspaceSwitcherContent,
+} from "@/components/workspace/workspace-switcher";
 
 export function UserMenu() {
-  const { signOut } = useAuthActions();
-  const router = useRouter();
-  const { theme, setTheme } = useTheme();
   const { currentWorkspaceId } = useAppStore();
-  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
 
   const user = useQuery(api.workspaces.getCurrentUser);
   const workspace = useQuery(
@@ -39,17 +35,9 @@ export function UserMenu() {
     .join("")
     .toUpperCase();
 
-  const handleSignOut = () => {
-    if (isSigningOut) return;
-
-    setIsSigningOut(true);
-    const signOutPromise = signOut();
-    router.replace("/login");
-    void signOutPromise;
-  };
-
   return (
-    <DropdownMenu>
+    <>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-2 px-1.5 py-1.5 rounded-md hover:bg-accent/50 data-[state=open]:bg-accent/70 transition-colors flex-1 min-w-0">
           <Avatar className="w-6 h-6 shrink-0">
@@ -72,58 +60,22 @@ export function UserMenu() {
         side="bottom"
         sideOffset={8}
         collisionPadding={16}
-        className="w-[320px] max-w-[calc(100vw-1.5rem)] rounded-xl border-border/70 bg-popover/95 p-2 shadow-2xl backdrop-blur-xl"
+        className="w-[344px] max-w-[calc(100vw-1.5rem)] rounded-[24px] border-border/70 bg-popover/95 p-0 shadow-2xl backdrop-blur-xl"
       >
-        <DropdownMenuLabel className="font-normal px-2 py-2">
-          <div className="flex items-center gap-3">
-            <Avatar className="w-9 h-9 shrink-0">
-              <AvatarImage src={(user as any)?.image} />
-              <AvatarFallback className="text-sm bg-muted text-foreground">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold leading-none truncate">
-                {workspace?.name ?? "MadVibe"}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1 truncate">
-                {(user as any)?.email}
-              </p>
-            </div>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="h-9 rounded-md"
-          onClick={() => router.push("/workspace/settings")}
-        >
-          <Settings className="w-4 h-4 mr-2" /> Settings
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="h-9 rounded-md"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-        >
-          {theme === "dark" ? (
-            <Sun className="w-4 h-4 mr-2" />
-          ) : (
-            <Moon className="w-4 h-4 mr-2" />
-          )}
-          Toggle theme
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          disabled={isSigningOut}
-          onClick={handleSignOut}
-          className="h-9 rounded-md text-destructive focus:text-destructive disabled:opacity-60"
-        >
-          {isSigningOut ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <LogOut className="w-4 h-4 mr-2" />
-          )}{" "}
-          Sign out
-        </DropdownMenuItem>
+        <WorkspaceSwitcherContent
+          onClose={() => setOpen(false)}
+          onRequestCreateWorkspace={() => {
+            setOpen(false);
+            setCreateWorkspaceOpen(true);
+          }}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
+    <CreateWorkspaceDialog
+      open={createWorkspaceOpen}
+      onOpenChange={setCreateWorkspaceOpen}
+      onCreated={() => setOpen(false)}
+    />
+    </>
   );
 }

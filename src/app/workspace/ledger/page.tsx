@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAppStore } from "@/store/app.store";
 import { cn } from "@/lib/utils";
 import {
@@ -416,6 +416,14 @@ function BudgetTab() {
 export default function LedgerPage() {
   const { ledgerTab, setLedgerTab } = useAppStore();
 
+  // Track which tabs have ever been visited — mount once, keep alive after
+  const [mounted, setMounted] = useState<Record<string, boolean>>({ [ledgerTab]: true });
+
+  const handleTabChange = (id: Tab) => {
+    setLedgerTab(id);
+    setMounted((prev) => ({ ...prev, [id]: true }));
+  };
+
   return (
     <div className="min-h-full bg-background">
       {/* Header */}
@@ -431,7 +439,26 @@ export default function LedgerPage() {
             {TABS.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setLedgerTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
+                className={cn(
+                  "shrink-0 text-xs font-medium px-4 py-2 rounded-lg transition-all min-h-[36px]",
+                  ledgerTab === tab.id
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Desktop tab bar */}
+        <div className="max-w-5xl mx-auto px-4 pb-2 hidden md:block">
+          <div className="flex gap-1">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => handleTabChange(tab.id)}
                 className={cn(
                   "shrink-0 text-xs font-medium px-4 py-2 rounded-lg transition-all min-h-[36px]",
                   ledgerTab === tab.id
@@ -447,10 +474,19 @@ export default function LedgerPage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-4 md:py-6">
-        <div className={ledgerTab !== "dashboard" ? "hidden" : ""}><DashboardTab /></div>
-        <div className={ledgerTab !== "transactions" ? "hidden" : ""}><TransactionsTab /></div>
-        <div className={ledgerTab !== "budget" ? "hidden" : ""}><BudgetTab /></div>
-        <div className={ledgerTab !== "investments" ? "hidden" : ""}><InvestmentsTab /></div>
+        {/* Only render a tab after it has been visited — prevents firing all queries upfront */}
+        {mounted["dashboard"] && (
+          <div className={ledgerTab !== "dashboard" ? "hidden" : ""}><DashboardTab /></div>
+        )}
+        {mounted["transactions"] && (
+          <div className={ledgerTab !== "transactions" ? "hidden" : ""}><TransactionsTab /></div>
+        )}
+        {mounted["budget"] && (
+          <div className={ledgerTab !== "budget" ? "hidden" : ""}><BudgetTab /></div>
+        )}
+        {mounted["investments"] && (
+          <div className={ledgerTab !== "investments" ? "hidden" : ""}><InvestmentsTab /></div>
+        )}
       </div>
     </div>
   );

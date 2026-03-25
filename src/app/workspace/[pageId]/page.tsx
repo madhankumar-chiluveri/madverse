@@ -15,7 +15,7 @@ export default function PagePage() {
   const params = useParams();
   const pageId = params.pageId as Id<"pages">;
   const addRecentPage = useAppStore((state) => state.addRecentPage);
-  const [resolvedPage, setResolvedPage] = useState<any | null>(null);
+  const [resolvedPage, setResolvedPage] = useState<any | null | undefined>(undefined);
 
   const page = useQuery(api.pages.get, { id: pageId });
 
@@ -32,12 +32,12 @@ export default function PagePage() {
   }, [page]);
 
   const displayPage = page === undefined ? resolvedPage : page;
-  const isRouteTransitioning = page === undefined && resolvedPage !== null;
+  const isRouteTransitioning = page === undefined && resolvedPage !== undefined && resolvedPage !== null;
 
   if (displayPage === undefined) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      <div className="flex h-full min-h-[50vh] flex-1 items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/50" />
       </div>
     );
   }

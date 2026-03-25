@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useAppStore } from "@/store/app.store";
@@ -55,9 +55,10 @@ export function CommandPalette() {
     currentWorkspaceId ? { workspaceId: currentWorkspaceId } : "skip"
   );
 
-  const recentPages =
-    allPages?.filter((p: any) => recentPageIds.includes(p._id)).slice(0, 5) ??
-    [];
+  const recentPages = useMemo(
+    () => allPages?.filter((p: any) => recentPageIds.includes(p._id)).slice(0, 5) ?? [],
+    [allPages, recentPageIds]
+  );
 
   // Keyboard shortcut
   useEffect(() => {
@@ -71,17 +72,17 @@ export function CommandPalette() {
     return () => document.removeEventListener("keydown", down);
   }, [commandPaletteOpen, setCommandPaletteOpen]);
 
-  const close = () => {
+  const close = useCallback(() => {
     setCommandPaletteOpen(false);
     setSearch("");
-  };
+  }, [setCommandPaletteOpen]);
 
-  const navigate = (path: string) => {
+  const navigate = useCallback((path: string) => {
     router.push(path);
     close();
-  };
+  }, [router, close]);
 
-  const handleCreatePage = async () => {
+  const handleCreatePage = useCallback(async () => {
     if (!currentWorkspaceId) return;
     try {
       const id = await createPage({
@@ -94,13 +95,13 @@ export function CommandPalette() {
     } catch {
       toast.error("Failed to create page");
     }
-  };
+  }, [currentWorkspaceId, createPage, search, navigate]);
 
-  const getPageIcon = (type: string) => {
+  const getPageIcon = useCallback((type: string) => {
     if (type === "database") return <Database className="w-4 h-4 mr-2 text-muted-foreground" />;
     if (type === "dashboard") return <LayoutDashboard className="w-4 h-4 mr-2 text-muted-foreground" />;
     return <FileText className="w-4 h-4 mr-2 text-muted-foreground" />;
-  };
+  }, []);
 
   const displayResults = search.length > 0 ? (searchResults ?? []) : [];
 

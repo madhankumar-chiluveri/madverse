@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BellRing,
+  Building2,
   ChevronRight,
   FileUp,
   FolderPlus,
@@ -36,6 +37,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+import {
+  CreateWorkspaceDialog,
+  WorkspaceSwitcherContent,
+} from "@/components/workspace/workspace-switcher";
 
 type ActionTone = "neutral" | "amber" | "blue" | "emerald";
 
@@ -128,15 +133,14 @@ export function WorkspaceActionMenu() {
   const [newSpaceName, setNewSpaceName] = useState("");
   const [newSpaceLoading, setNewSpaceLoading] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [workspaceSwitcherOpen, setWorkspaceSwitcherOpen] = useState(false);
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
 
   const workspaces = useQuery(api.workspaces.listWorkspaces) ?? [];
   const createSpace = useMutation(api.pages.createSpace);
 
   const resolvedWorkspaceId = useMemo<Id<"workspaces"> | null>(() => {
-    if (
-      currentWorkspaceId &&
-      workspaces.some((workspace: any) => workspace._id === currentWorkspaceId)
-    ) {
+    if (currentWorkspaceId) {
       return currentWorkspaceId;
     }
 
@@ -183,6 +187,11 @@ export function WorkspaceActionMenu() {
     setImportModalOpen(true);
   };
 
+  const handleOpenWorkspaces = () => {
+    closeMenu();
+    setWorkspaceSwitcherOpen(true);
+  };
+
   const handleOpenTrash = () => {
     closeMenu();
     if (pathname !== "/workspace/trash") {
@@ -225,7 +234,7 @@ export function WorkspaceActionMenu() {
           <button
             type="button"
             aria-label="Open workspace actions"
-            className="group pointer-events-auto relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-[#161513]/90 text-zinc-100 shadow-[0_14px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-all hover:border-white/16 hover:bg-[#1a1917]"
+            className="group pointer-events-auto relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#161513]/90 text-zinc-100 shadow-[0_14px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-all hover:border-white/16 hover:bg-[#1a1917] md:h-9 md:w-9"
           >
             <MoreHorizontal className="h-4 w-4" />
             {overdueCount > 0 ? (
@@ -239,7 +248,7 @@ export function WorkspaceActionMenu() {
         <DropdownMenuContent
           align="end"
           sideOffset={12}
-          className="w-[332px] rounded-[22px] border-white/10 bg-[#141311]/96 p-2 text-zinc-100 shadow-[0_28px_80px_rgba(0,0,0,0.48)] backdrop-blur-2xl"
+          className="w-[332px] max-w-[calc(100vw-1rem)] rounded-[22px] border-white/10 bg-[#141311]/96 p-2 text-zinc-100 shadow-[0_28px_80px_rgba(0,0,0,0.48)] backdrop-blur-2xl"
         >
           <div className="rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.025))] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <div className="flex items-center justify-between gap-3">
@@ -263,6 +272,13 @@ export function WorkspaceActionMenu() {
           </div>
 
           <div className="mt-2 grid grid-cols-2 gap-2">
+            <ActionTile
+              icon={Building2}
+              label="Workspaces"
+              meta="Switch or create"
+              onClick={handleOpenWorkspaces}
+              tone="neutral"
+            />
             <ActionTile
               icon={BellRing}
               label="Reminders"
@@ -377,6 +393,28 @@ export function WorkspaceActionMenu() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={workspaceSwitcherOpen} onOpenChange={setWorkspaceSwitcherOpen}>
+        <DialogContent
+          title="Workspaces"
+          hideTitleVisually={true}
+          className="max-w-[calc(100vw-1rem)] border-white/10 bg-[#161513] p-0 text-zinc-100 sm:max-w-[360px]"
+        >
+          <WorkspaceSwitcherContent
+            className="rounded-[24px]"
+            onClose={() => setWorkspaceSwitcherOpen(false)}
+            onRequestCreateWorkspace={() => {
+              setWorkspaceSwitcherOpen(false);
+              setCreateWorkspaceOpen(true);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <CreateWorkspaceDialog
+        open={createWorkspaceOpen}
+        onOpenChange={setCreateWorkspaceOpen}
+      />
 
       {resolvedWorkspaceId ? (
         <CreateSpaceItemModal

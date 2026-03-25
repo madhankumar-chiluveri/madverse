@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { DayPicker } from "react-day-picker";
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3 } from "lucide-react";
+import { Calendar, CalendarDays, ChevronLeft, ChevronRight, Clock3, Sun, Sunrise } from "lucide-react";
+import * as chrono from "chrono-node";
+import { addDays, addHours, nextMonday, nextSaturday, setHours, startOfDay } from "date-fns";
 
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -106,39 +108,13 @@ function parseManualInput(
     return null;
   }
 
-  const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (dateOnlyMatch) {
-    const [, year, month, day] = dateOnlyMatch;
-    const baseDate = new Date(Number(year), Number(month) - 1, Number(day));
-    if (mode === "date") {
-      return baseDate;
-    }
-
-    const timeBase = fallbackDate ?? new Date();
-    const timeParts = getTimeParts(timeBase);
-    return withTime(baseDate, timeParts.hour, timeParts.minute, timeParts.period);
+  const parsedDate = chrono.parseDate(trimmed, fallbackDate ?? new Date(), { forwardDate: true });
+  
+  if (parsedDate) {
+    return mode === "date" ? withLocalDate(parsedDate) : parsedDate;
   }
 
-  const dateTimeMatch = trimmed.match(
-    /^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})$/
-  );
-  if (dateTimeMatch) {
-    const [, year, month, day, hours, minutes] = dateTimeMatch;
-    return new Date(
-      Number(year),
-      Number(month) - 1,
-      Number(day),
-      Number(hours),
-      Number(minutes)
-    );
-  }
-
-  const parsed = new Date(trimmed);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return mode === "date" ? withLocalDate(parsed) : parsed;
+  return null;
 }
 
 export function PremiumDateTimePicker({
@@ -200,6 +176,7 @@ export function PremiumDateTimePicker({
     const parsed = parseManualInput(manualInput, mode, selectedDate);
     if (parsed) {
       updateValue(parsed);
+      setOpen(false);
     } else {
       setManualInput(formatInputValue(selectedDate, mode));
     }
@@ -252,162 +229,209 @@ export function PremiumDateTimePicker({
         align={align}
         sideOffset={6}
         className={cn(
-          "w-[320px] max-h-[var(--radix-popover-content-available-height)] overflow-y-auto overscroll-contain border-white/10 bg-[#242321] p-2.5 text-zinc-100",
+          "w-auto max-h-[var(--radix-popover-content-available-height)] flex flex-col overflow-hidden border-white/10 bg-[#242321] p-0 shadow-2xl text-zinc-100",
           popoverClassName
         )}
       >
-        <div className="space-y-2.5">
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5">
-            <input
-              value={manualInput}
-              onChange={(event) => setManualInput(event.target.value)}
-              onBlur={handleManualCommit}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  handleManualCommit();
-                }
-
-                if (event.key === "Escape") {
-                  setManualInput(formatInputValue(selectedDate, mode));
-                  setOpen(false);
-                }
-              }}
-              placeholder={mode === "datetime" ? "Jan 20, 2026, 9:00 AM" : "Jan 20, 2026"}
-              className="w-full bg-transparent text-sm font-medium text-zinc-100 outline-none placeholder:text-zinc-500"
-              autoFocus
-            />
-          </div>
-
-          <div className="flex items-center justify-between px-1">
-            <div className="text-sm font-semibold text-zinc-100">
-              {formatMonthLabel(month)}
+        <div className="flex bg-[#242321]">
+          {/* Left Column */}
+          <div className="flex w-[290px] flex-col p-3 border-r border-white/5 space-y-3">
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 focus-within:border-white/20 focus-within:bg-white/[0.06] transition-colors">
+              <input
+                value={manualInput}
+                onChange={(event) => setManualInput(event.target.value)}
+                onBlur={handleManualCommit}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleManualCommit();
+                  }
+                  if (event.key === "Escape") {
+                    setManualInput(formatInputValue(selectedDate, mode));
+                    setOpen(false);
+                  }
+                }}
+                placeholder={mode === "datetime" ? "e.g., Tomorrow at 3pm" : "e.g., Next Friday"}
+                className="w-full bg-transparent text-sm font-medium text-zinc-100 outline-none placeholder:text-zinc-500"
+                autoFocus
+              />
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => handleDateSelect(new Date())}
-                className="rounded-lg px-2 py-1 text-[11px] font-medium text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white"
-              >
-                Today
-              </button>
-              <button
-                type="button"
-                onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white"
-                aria-label="Previous month"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white"
-                aria-label="Next month"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-
-          <DayPicker
-            mode="single"
-            selected={selectedDate}
-            onSelect={handleDateSelect}
-            month={month}
-            onMonthChange={setMonth}
-            hideNavigation
-            showOutsideDays
-            className="premium-day-picker"
-            classNames={{
-              root: "w-full",
-              months: "w-full",
-              month: "w-full",
-              month_caption: "hidden",
-              month_grid: "w-full border-collapse",
-              weekdays: "grid grid-cols-7",
-              weekday: "pb-1 text-center text-[11px] font-medium text-zinc-500",
-              week: "grid grid-cols-7",
-              day: "flex items-center justify-center py-0",
-              day_button:
-                "flex h-9 w-9 items-center justify-center rounded-lg text-[13px] text-zinc-200 transition-colors hover:bg-white/[0.06] hover:text-white",
-              selected: "text-white",
-              today: "font-semibold text-zinc-100",
-              outside: "text-zinc-600",
-              disabled: "opacity-40",
-            }}
-            modifiersClassNames={{
-              selected: "[&>button]:bg-[#2b84df] [&>button]:font-semibold [&>button]:text-white",
-              today: "[&>button]:border [&>button]:border-white/10",
-              outside: "[&>button]:text-zinc-600",
-            }}
-          />
-
-          {mode === "datetime" && (
-            <div className="rounded-2xl border border-white/10 bg-black/10 p-2.5">
-              <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500">
-                <Clock3 className="h-3.5 w-3.5" />
-                Time
+            <div className="flex items-center justify-between px-1">
+              <div className="text-sm font-semibold text-zinc-100">
+                {formatMonthLabel(month)}
               </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleDateSelect(new Date())}
+                  className="rounded-lg px-2 py-1 text-[11px] font-medium text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white"
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
 
-              <div className="flex items-center gap-2">
-                <input
-                  value={timeParts.hour}
-                  onChange={(event) => updateTimePart("hour", event.target.value.replace(/\D/g, ""))}
-                  className="h-9 w-14 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-center text-sm text-zinc-100 outline-none transition-colors focus:border-white/20"
-                  inputMode="numeric"
-                  maxLength={2}
-                />
-                <span className="text-zinc-500">:</span>
-                <input
-                  value={timeParts.minute}
-                  onChange={(event) => updateTimePart("minute", event.target.value.replace(/\D/g, ""))}
-                  className="h-9 w-14 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-center text-sm text-zinc-100 outline-none transition-colors focus:border-white/20"
-                  inputMode="numeric"
-                  maxLength={2}
-                />
+            <DayPicker
+              mode="single"
+              selected={selectedDate}
+              onSelect={handleDateSelect}
+              month={month}
+              onMonthChange={setMonth}
+              hideNavigation
+              showOutsideDays
+              className="premium-day-picker"
+              classNames={{
+                root: "w-full outline-none",
+                months: "w-full outline-none",
+                month: "w-full outline-none",
+                month_caption: "hidden",
+                month_grid: "w-full border-collapse",
+                weekdays: "grid grid-cols-7",
+                weekday: "pb-1 text-center text-[11px] font-medium text-zinc-500",
+                week: "grid grid-cols-7",
+                day: "flex items-center justify-center py-0",
+                day_button:
+                  "flex h-9 w-9 outline-none items-center justify-center rounded-lg text-[13px] text-zinc-200 transition-colors hover:bg-white/[0.06] hover:text-white",
+                selected: "text-white",
+                today: "font-semibold text-zinc-100",
+                outside: "text-zinc-600",
+                disabled: "opacity-40",
+              }}
+              modifiersClassNames={{
+                selected: "[&>button]:bg-[#2b84df] [&>button]:font-semibold [&>button]:text-white",
+                today: "[&>button]:border [&>button]:border-white/10",
+                outside: "[&>button]:text-zinc-600",
+              }}
+            />
 
-                <div className="ml-auto flex items-center rounded-xl border border-white/10 bg-white/[0.03] p-1">
-                  {(["AM", "PM"] as const).map((period) => (
-                    <button
-                      key={period}
-                      type="button"
-                      onClick={() => updateTimePart("period", period)}
-                      className={cn(
-                        "rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors",
-                        timeParts.period === period
-                          ? "bg-white text-black"
-                          : "text-zinc-400 hover:bg-white/[0.05] hover:text-white"
-                      )}
-                    >
-                      {period}
-                    </button>
-                  ))}
+            <div className="flex items-center justify-between border-t border-white/10 pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  updateValue(null);
+                  setOpen(false);
+                }}
+                className="text-[13px] text-zinc-500 transition-colors hover:text-white"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-lg bg-white px-3 py-1.5 text-[13px] font-medium text-black transition-colors hover:bg-zinc-200"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+
+          {/* Right Column Options */}
+          <div className="flex w-[220px] max-h-[440px] flex-col p-3 bg-white/[0.01]">
+            <div className="mb-4 flex flex-col gap-1">
+              <div className="mb-1.5 text-[10px] font-bold tracking-widest text-zinc-500 uppercase">PRESETS</div>
+              <button
+                type="button"
+                onClick={() => {
+                  const now = new Date();
+                  updateValue(mode === "datetime" ? addHours(now, 3) : now);
+                  setOpen(false);
+                }}
+                className="flex items-center gap-2 rounded-lg border border-transparent px-2.5 py-2 text-left text-[12px] font-medium text-zinc-300 transition-colors hover:bg-white/[0.04] hover:text-white"
+              >
+                <Clock3 className="h-3.5 w-3.5 text-blue-400" />
+                Later Today
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const tomorrow = addDays(new Date(), 1);
+                  updateValue(mode === "datetime" ? setHours(startOfDay(tomorrow), 9) : tomorrow);
+                  setOpen(false);
+                }}
+                className="flex items-center gap-2 rounded-lg border border-transparent px-2.5 py-2 text-left text-[12px] font-medium text-zinc-300 transition-colors hover:bg-white/[0.04] hover:text-white"
+              >
+                <Sunrise className="h-3.5 w-3.5 text-orange-400" />
+                Tomorrow Morning
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const thisWeekend = nextSaturday(new Date());
+                  updateValue(mode === "datetime" ? setHours(startOfDay(thisWeekend), 10) : thisWeekend);
+                  setOpen(false);
+                }}
+                className="flex items-center gap-2 rounded-lg border border-transparent px-2.5 py-2 text-left text-[12px] font-medium text-zinc-300 transition-colors hover:bg-white/[0.04] hover:text-white"
+              >
+                <Sun className="h-3.5 w-3.5 text-amber-400" />
+                This Weekend
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextWeek = nextMonday(new Date());
+                  updateValue(mode === "datetime" ? setHours(startOfDay(nextWeek), 9) : nextWeek);
+                  setOpen(false);
+                }}
+                className="flex items-center gap-2 rounded-lg border border-transparent px-2.5 py-2 text-left text-[12px] font-medium text-zinc-300 transition-colors hover:bg-white/[0.04] hover:text-white"
+              >
+                <Calendar className="h-3.5 w-3.5 text-emerald-400" />
+                Next Week
+              </button>
+            </div>
+
+            {mode === "datetime" && (
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="mb-1.5 text-[10px] font-bold tracking-widest text-zinc-500 uppercase">TIME</div>
+                <div className="flex-1 overflow-y-auto pr-2 -mr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
+                  <div className="flex flex-col gap-0.5 pb-2">
+                    {Array.from({ length: 48 }).map((_, i) => {
+                      const h = Math.floor(i / 2);
+                      const m = (i % 2) * 30;
+                      const isPM = h >= 12;
+                      const dispH = h === 0 ? 12 : h > 12 ? h - 12 : h;
+                      const dispM = m === 0 ? "00" : "30";
+                      const label = `${dispH}:${dispM} ${isPM ? "PM" : "AM"}`;
+                      const isSelected = selectedDate?.getHours() === h && selectedDate?.getMinutes() === m;
+                      
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            const base = selectedDate ?? new Date();
+                            const newDate = new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, m);
+                            updateValue(newDate);
+                          }}
+                          className={cn(
+                            "flex items-center justify-between rounded-md px-2.5 py-1.5 text-[12px] transition-colors",
+                            isSelected 
+                              ? "bg-[#2b84df]/20 text-[#2b84df] font-semibold" 
+                              : "text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-100 font-medium"
+                          )}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between border-t border-white/10 pt-2.5">
-            <button
-              type="button"
-              onClick={() => {
-                updateValue(null);
-                setOpen(false);
-              }}
-              className="text-[13px] text-zinc-500 transition-colors hover:text-white"
-            >
-              Clear
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-lg bg-white px-3 py-1.5 text-[13px] font-medium text-black transition-colors hover:bg-zinc-200"
-            >
-              Done
-            </button>
+            )}
           </div>
         </div>
       </PopoverContent>

@@ -5,7 +5,9 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
+  useTransition,
   type MouseEvent,
   type ReactNode,
 } from "react";
@@ -122,19 +124,23 @@ const ModuleRailItem = memo(function ModuleRailItem({
   mod,
   isActive,
   isDocked,
+  showLabel,
+  showTooltip,
   onClick,
   onPrefetch,
 }: {
   mod: typeof MODULES[number];
   isActive: boolean;
   isDocked?: boolean;
+  showLabel: boolean;
+  showTooltip: boolean;
   onClick: (event: MouseEvent<HTMLAnchorElement>) => void;
   onPrefetch: () => void;
 }) {
   const Icon = mod.icon;
 
   return (
-    <div className="group relative flex justify-center">
+    <div className="group relative flex w-full overflow-hidden">
       <Link
         href={mod.href}
         prefetch
@@ -144,7 +150,8 @@ const ModuleRailItem = memo(function ModuleRailItem({
         onMouseEnter={onPrefetch}
         onFocus={onPrefetch}
         className={cn(
-          "relative flex h-11 w-11 items-center justify-center rounded-2xl border transition-all",
+          "relative flex h-11 items-center overflow-hidden rounded-2xl border transition-[width,padding,gap,background-color,border-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          showLabel ? "w-full justify-start gap-3 px-3" : "w-11 justify-center",
           isActive
             ? "border-primary/30 bg-primary/12 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
             : isDocked
@@ -160,19 +167,34 @@ const ModuleRailItem = memo(function ModuleRailItem({
           )}
           strokeWidth={isActive ? 2.4 : 2}
         />
+        <span
+          className={cn(
+            "min-w-0 overflow-hidden whitespace-nowrap text-sm font-medium transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+            showLabel
+              ? "max-w-[120px] translate-x-0 opacity-100"
+              : "max-w-0 -translate-x-1 opacity-0"
+          )}
+        >
+          {mod.label}
+        </span>
         {isActive || isDocked ? (
           <span
             className={cn(
-              "absolute right-1 top-1 h-1.5 w-1.5 rounded-full",
+              "absolute h-1.5 w-1.5 rounded-full",
+              showLabel
+                ? "right-3 top-1/2 -translate-y-1/2"
+                : "right-1 top-1",
               isActive ? "bg-primary" : "bg-zinc-200"
             )}
           />
         ) : null}
       </Link>
 
-      <span className="pointer-events-none absolute left-full top-1/2 z-20 ml-3 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#181715] px-2 py-1 text-[11px] text-zinc-100 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-        {mod.label}
-      </span>
+      {showTooltip ? (
+        <span className="pointer-events-none absolute left-full top-1/2 z-20 ml-3 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#181715] px-2 py-1 text-[11px] text-zinc-100 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+          {mod.label}
+        </span>
+      ) : null}
     </div>
   );
 });
@@ -187,21 +209,31 @@ function ModuleRail() {
     setActiveModule,
     setContextPaneCollapsed,
   } = useAppStore();
+  const [, startTransition] = useTransition();
+  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showRailPeek, setShowRailPeek] = useState(false);
+  const [showCollapsedLabels, setShowCollapsedLabels] = useState(false);
 
   const active = useMemo(() => getRouteModule(pathname), [pathname]);
+  const showExpandedRail = contextPaneCollapsed && showRailPeek;
+  const showExpandedRailLabels = showExpandedRail && showCollapsedLabels;
 
   const handleModuleClick = useCallback(
     (modId: typeof MODULES[number]["id"]) => {
       if (modId === "ai") {
-        setActiveModule("ai");
+        // setActiveModule is handled by the useEffect synced to pathname
         openMaddyPanel("chat");
         return;
       }
-
-      setActiveModule(modId);
-      setContextPaneCollapsed(false);
+      // Wrap sidebar state updates in a transition so the route change renders first
+      startTransition(() => {
+        if (contextPaneCollapsed) {
+          setContextPaneCollapsed(false);
+        }
+      });
     },
-    [openMaddyPanel, setActiveModule, setContextPaneCollapsed]
+    [contextPaneCollapsed, openMaddyPanel, setContextPaneCollapsed, startTransition]
   );
 
   const handlePrefetch = useCallback(
@@ -217,8 +249,83 @@ function ModuleRail() {
     });
   }, [router]);
 
+  const openRailPeek = useCallback(() => {
+    if (!contextPaneCollapsed) return;
+
+    if (collapseTimerRef.current) {
+      clearTimeout(collapseTimerRef.current);
+      collapseTimerRef.current = null;
+    }
+    if (revealTimerRef.current) {
+      clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+
+    setShowRailPeek(true);
+    revealTimerRef.current = setTimeout(() => {
+      setShowCollapsedLabels(true);
+      revealTimerRef.current = null;
+    }, 90);
+  }, [contextPaneCollapsed]);
+
+  const closeRailPeek = useCallback(() => {
+    if (revealTimerRef.current) {
+      clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+    if (collapseTimerRef.current) {
+      clearTimeout(collapseTimerRef.current);
+      collapseTimerRef.current = null;
+    }
+
+    setShowCollapsedLabels(false);
+    collapseTimerRef.current = setTimeout(() => {
+      setShowRailPeek(false);
+      collapseTimerRef.current = null;
+    }, 130);
+  }, []);
+
+  useEffect(() => {
+    if (!contextPaneCollapsed) {
+      if (revealTimerRef.current) {
+        clearTimeout(revealTimerRef.current);
+        revealTimerRef.current = null;
+      }
+      if (collapseTimerRef.current) {
+        clearTimeout(collapseTimerRef.current);
+        collapseTimerRef.current = null;
+      }
+      setShowRailPeek(false);
+      setShowCollapsedLabels(false);
+    }
+  }, [contextPaneCollapsed]);
+
+  useEffect(() => {
+    return () => {
+      if (revealTimerRef.current) {
+        clearTimeout(revealTimerRef.current);
+      }
+      if (collapseTimerRef.current) {
+        clearTimeout(collapseTimerRef.current);
+      }
+    };
+  }, []);
+
   return (
-    <div className="flex h-full w-[72px] shrink-0 flex-col border-r border-border/80 bg-sidebar/95">
+    <div
+      className={cn(
+        "flex h-full shrink-0 flex-col border-r border-border/80 bg-sidebar/95 transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        showExpandedRail ? "w-[208px]" : "w-[72px]"
+      )}
+      onMouseEnter={openRailPeek}
+      onMouseLeave={closeRailPeek}
+      onFocusCapture={openRailPeek}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          closeRailPeek();
+        }
+      }}
+    >
       <div className="flex h-16 items-center justify-center border-b border-border/80">
         <div className="group relative">
           <Link
@@ -230,17 +337,32 @@ function ModuleRail() {
               setActiveModule("overview");
               setContextPaneCollapsed(false);
             }}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] transition-all hover:border-white/16 hover:bg-white/[0.05]"
+            className={cn(
+              "flex h-11 items-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition-[width,padding,gap,background-color,border-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-white/16 hover:bg-white/[0.05]",
+              showExpandedRail ? "w-[184px] justify-start gap-3 px-3" : "w-11 justify-center"
+            )}
           >
             <AppIcon className="h-6 w-6 rounded-xl" />
+            <span
+              className={cn(
+                "min-w-0 overflow-hidden whitespace-nowrap text-sm font-semibold text-foreground transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                showExpandedRailLabels
+                  ? "max-w-[96px] translate-x-0 opacity-100"
+                  : "max-w-0 -translate-x-1 opacity-0"
+              )}
+            >
+              MadVibe
+            </span>
           </Link>
-          <span className="pointer-events-none absolute left-full top-1/2 z-20 ml-3 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#181715] px-2 py-1 text-[11px] text-zinc-100 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-            Workspace overview
-          </span>
+          {!showExpandedRail ? (
+            <span className="pointer-events-none absolute left-full top-1/2 z-20 ml-3 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#181715] px-2 py-1 text-[11px] text-zinc-100 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+              Workspace overview
+            </span>
+          ) : null}
         </div>
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+      <nav className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4">
         <div className="space-y-2">
           {MODULES.map((mod) => (
             <ModuleRailItem
@@ -248,6 +370,8 @@ function ModuleRail() {
               mod={mod}
               isActive={active === mod.id}
               isDocked={mod.id === "ai" && maddyPanelOpen}
+              showLabel={showExpandedRailLabels}
+              showTooltip={!showExpandedRail}
               onClick={(event) => {
                 if (mod.id === "ai") {
                   event.preventDefault();
@@ -262,19 +386,34 @@ function ModuleRail() {
 
       <div className="border-t border-border/80 p-3">
         {contextPaneCollapsed ? (
-          <div className="group relative flex justify-center">
+          <div className="group relative flex">
             <button
               type="button"
               aria-label="Open context pane"
               title="Open context pane"
               onClick={() => setContextPaneCollapsed(false)}
-              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-muted-foreground transition-all hover:border-white/16 hover:bg-white/[0.05] hover:text-foreground"
+              className={cn(
+                "flex h-11 items-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] text-muted-foreground transition-[width,padding,gap,background-color,border-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-white/16 hover:bg-white/[0.05] hover:text-foreground",
+                showExpandedRail ? "w-full justify-start gap-3 px-3" : "w-11 justify-center"
+              )}
             >
               <PanelLeft className="h-[18px] w-[18px]" />
+              <span
+                className={cn(
+                  "min-w-0 overflow-hidden whitespace-nowrap text-sm font-medium transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                  showExpandedRailLabels
+                    ? "max-w-[80px] translate-x-0 opacity-100"
+                    : "max-w-0 -translate-x-1 opacity-0"
+                )}
+              >
+                Open pane
+              </span>
             </button>
-            <span className="pointer-events-none absolute left-full top-1/2 z-20 ml-3 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#181715] px-2 py-1 text-[11px] text-zinc-100 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-              Open pane
-            </span>
+            {!showExpandedRail ? (
+              <span className="pointer-events-none absolute left-full top-1/2 z-20 ml-3 -translate-y-1/2 whitespace-nowrap rounded-md border border-white/10 bg-[#181715] px-2 py-1 text-[11px] text-zinc-100 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                Open pane
+              </span>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -291,6 +430,7 @@ interface PageItemProps {
 function PageItem({ page, depth = 0, workspaceId }: PageItemProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const [, startTransition] = useTransition();
   const { toggleExpanded, isExpanded, setContextPaneCollapsed, setExpanded } = useAppStore();
   const expanded = isExpanded(page._id);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -298,13 +438,19 @@ function PageItem({ page, depth = 0, workspaceId }: PageItemProps) {
 
   const createPage = useMutation(api.pages.create);
   const archivePage = useMutation(api.pages.archive);
-  const children = useQuery(api.pages.list, {
-    workspaceId,
-    parentId: page._id,
-  });
 
   const isActive = pathname === pageHref;
-  const hasChildren = Boolean(children?.length);
+
+  // Only fire the children query when this item is expanded — avoids N live
+  // Convex subscriptions for every page in the sidebar regardless of state.
+  const children = useQuery(
+    api.pages.list,
+    expanded ? { workspaceId, parentId: page._id } : "skip"
+  );
+
+  // Show chevron optimistically for all collapsed items (we haven't checked yet).
+  // Once expanded and query resolves, reflect the real count.
+  const hasChildren = children !== undefined ? Boolean(children.length) : !expanded;
   const handlePrefetch = () => router.prefetch(pageHref);
 
   useEffect(() => {
@@ -389,7 +535,7 @@ function PageItem({ page, depth = 0, workspaceId }: PageItemProps) {
           href={pageHref}
           prefetch
           className="flex min-w-0 flex-1 items-center gap-1.5"
-          onClick={() => setContextPaneCollapsed(true)}
+          onClick={() => startTransition(() => setContextPaneCollapsed(true))}
           onMouseEnter={handlePrefetch}
           onFocus={handlePrefetch}
         >
@@ -1028,17 +1174,12 @@ export function Sidebar() {
           : "overview";
 
   const workspaces = useQuery(api.workspaces.listWorkspaces);
-  const resolvedWorkspaceId =
-    currentWorkspaceId && workspaces?.some((workspace: any) => workspace._id === currentWorkspaceId)
-      ? currentWorkspaceId
-      : workspaces && workspaces.length > 0
-        ? workspaces[0]._id
-        : null;
+  const resolvedWorkspaceId = currentWorkspaceId ?? workspaces?.[0]?._id ?? null;
 
   useEffect(() => {
-    if (!resolvedWorkspaceId || resolvedWorkspaceId === currentWorkspaceId) return;
-    setCurrentWorkspaceId(resolvedWorkspaceId);
-  }, [resolvedWorkspaceId, currentWorkspaceId, setCurrentWorkspaceId]);
+    if (currentWorkspaceId || !workspaces?.length) return;
+    setCurrentWorkspaceId(workspaces[0]._id);
+  }, [workspaces, currentWorkspaceId, setCurrentWorkspaceId]);
 
   useEffect(() => {
     setActiveModule(routeModule);

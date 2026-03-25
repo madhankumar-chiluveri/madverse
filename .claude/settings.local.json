@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find /c/Users/Madhan/Desktop/mad-ware/madvibe/src/app -type f -name *.tsx -o -type d)"
+      "Bash(find /c/Users/Madhan/Desktop/mad-ware/madvibe/src/app -type f -name *.tsx -o -type d)",
+      "Bash(npx convex:*)",
+      "Bash(grep -E \"\\\\.\\(css|tsx\\)$\")",
+      "Bash(xargs grep:*)",
+      "Bash(xargs wc:*)",
+      "Bash(grep -l \"framer-motion\\\\|motion\\\\.\" /d/Madhan_Projects/madvibe/src/**/*.tsx)",
+      "Bash(npm run:*)"
     ]
   }
 }
