@@ -60,6 +60,7 @@ export function BlockNoteEditor({
   const editor = useCreateBlockNote({
     initialContent: undefined,
     setIdAttribute: true,
+    tabBehavior: "prefer-indent",
   });
 
   // ── Reset state when navigating to a different page ──────────────────────

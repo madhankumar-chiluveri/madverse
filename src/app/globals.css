@@ -139,6 +139,11 @@
   color: hsl(var(--foreground));
 }
 
+/* Hide vertical indentation lines for nested blocks */
+.blocknote-wrapper .bn-block-group .bn-block:not(:has(.bn-toggle-wrapper)) .bn-block-group .bn-block-outer:not([data-prev-depth-changed])::before {
+  border-left: none !important;
+}
+
 .blocknote-wrapper .bn-side-menu {
   gap: 4px;
 }

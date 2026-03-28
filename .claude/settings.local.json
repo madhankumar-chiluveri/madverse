@@ -21,7 +21,16 @@
       "Bash(ls convex/*.ts)",
       "Bash(grep -l \"workspaces\" convex/*.ts)",
       "Bash(grep -l \"WorkspaceTopBar\" src/app/workspace/*/page.tsx src/components/editor/page-view.tsx)",
-      "Bash(grep -rn \"sticky top-0\" src/app/workspace/*/page.tsx)"
+      "Bash(grep -rn \"sticky top-0\" src/app/workspace/*/page.tsx)",
+      "Bash(node -e \":*)",
+      "Bash(grep \"\\\\.ts$\")",
+      "Bash(npm audit:*)",
+      "Bash(grep -r \"block-group\\\\|indent\\\\|border-left\\\\|nesting\" d:/Madhan_Projects/madvibe/node_modules/@blocknote/mantine/dist --include=*.css -l)",
+      "Bash(python3 -c \":*)",
+      "Bash(node -e \"require\\(''sharp''\\)\")",
+      "Bash(python3 -c \"import cairosvg\")",
+      "Bash(node -e \"require\\(''canvas''\\)\")",
+      "Bash(node -e \"const sharp = require\\(''sharp''\\); console.log\\(sharp.versions\\);\")"
     ]
   }
 }
