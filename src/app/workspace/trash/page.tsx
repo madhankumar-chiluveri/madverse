@@ -208,7 +208,6 @@ export default function TrashPage() {
             </div>
           </DialogContent>
         </Dialog>
-      </div>
     </div>
   );
 }
