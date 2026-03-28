@@ -8,6 +8,7 @@ crons.interval(
   "sync-latest-feed",
   { hours: 3 },
   api.feedSync.fetchAndProcessFeed,
+  {},
 );
 
 export default crons;

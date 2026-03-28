@@ -3,12 +3,15 @@
 import { BookOpen, Search } from "lucide-react";
 import { useAppStore } from "@/store/app.store";
 import { Button } from "@/components/ui/button";
+import { WorkspaceTopBar } from "@/components/workspace/workspace-top-bar";
 
 export default function BrainPage() {
   const { setCommandPaletteOpen } = useAppStore();
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-full px-4 py-16 text-center gap-4">
+    <div className="min-h-full">
+      <WorkspaceTopBar moduleTitle="Brain" />
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-41px)] px-4 py-16 text-center gap-4">
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/40">
         <BookOpen className="h-7 w-7 text-muted-foreground" />
       </div>
@@ -24,6 +27,7 @@ export default function BrainPage() {
           Search pages
         </Button>
       </div>
+    </div>
     </div>
   );
 }

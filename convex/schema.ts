@@ -359,6 +359,24 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_userId_isRead", ["userId", "isRead"]),
 
+  // ── Page Comments ──────────────────────────────────
+  comments: defineTable({
+    pageId: v.id("pages"),
+    workspaceId: v.id("workspaces"),
+    parentCommentId: v.optional(v.union(v.id("comments"), v.null())),
+    authorId: v.string(),
+    authorName: v.optional(v.string()),
+    content: v.string(),
+    isResolved: v.boolean(),
+    resolvedAt: v.optional(v.union(v.number(), v.null())),
+    resolvedBy: v.optional(v.union(v.string(), v.null())),
+    editedAt: v.optional(v.union(v.number(), v.null())),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_pageId", ["pageId"])
+    .index("by_parentCommentId", ["parentCommentId"]),
+
   reminders: defineTable({
     userId: v.string(),
     workspaceId: v.id("workspaces"),

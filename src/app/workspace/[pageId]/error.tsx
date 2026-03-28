@@ -10,7 +10,7 @@ export default function PageError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[PageError]", error);
+    // Error is captured by Next.js error boundary — no console noise in production
   }, [error]);
 
   return (

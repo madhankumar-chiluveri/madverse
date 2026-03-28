@@ -743,7 +743,11 @@ function SpaceSection({ space, workspaceId, onAddNew }: SpaceSectionProps) {
 
           <div className="mt-1 px-1">
             {children === undefined ? (
-              <div className="px-3 py-2 text-xs text-muted-foreground">Loading...</div>
+              <div className="space-y-1.5 px-2 py-1.5">
+                <div className="skeleton-shimmer h-3.5 w-3/4 rounded" />
+                <div className="skeleton-shimmer h-3.5 w-1/2 rounded" />
+                <div className="skeleton-shimmer h-3.5 w-5/6 rounded" />
+              </div>
             ) : children.length === 0 ? (
               <div className="px-3 py-2 text-xs text-muted-foreground">
                 No items yet. Use Add new to create the first page or database.
@@ -866,7 +870,12 @@ function KBSidebarContent({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
 
         <div className="px-1 pb-4">
           {rootPages === undefined || spaceRoots === undefined ? (
-            <div className="animate-pulse px-3 py-2 text-xs text-muted-foreground">Loading...</div>
+            <div className="space-y-1.5 px-2 py-1.5">
+              <div className="skeleton-shimmer h-3.5 w-3/4 rounded" />
+              <div className="skeleton-shimmer h-3.5 w-1/2 rounded" />
+              <div className="skeleton-shimmer h-3.5 w-5/6 rounded" />
+              <div className="skeleton-shimmer h-3.5 w-2/3 rounded" />
+            </div>
           ) : (
             <>
               <div className="mb-2 rounded-xl border border-white/6 bg-black/10">

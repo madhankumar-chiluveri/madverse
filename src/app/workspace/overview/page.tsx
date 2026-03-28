@@ -1,19 +1,21 @@
 "use client";
 
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, memo, useCallback } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/store/app.store";
 import { cn } from "@/lib/utils";
 import { ReminderOverviewCard } from "@/components/reminders/reminder-overview-card";
+import { toast } from "sonner";
 import {
   Sun, Moon, Sunset, ChevronRight,
   Zap, Timer, TrendingUp, TrendingDown, Newspaper,
-  Sparkles, BarChart2, Target, Check
+  Sparkles, BarChart2, Target, Check, Loader2,
 } from "lucide-react";
+import { WorkspaceTopBar } from "@/components/workspace/workspace-top-bar";
 
-// ── Greeting Widget ───────────────────────────────────────────────────────────
+// ── Greeting Widget ────────────────────────────────────────────────────────────
 const GreetingWidget = memo(function GreetingWidget() {
   const hour = new Date().getHours();
   const greeting =
@@ -28,7 +30,7 @@ const GreetingWidget = memo(function GreetingWidget() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
           <Icon className="w-6 h-6 text-amber-500" />
-          {greeting} ✨
+          {greeting}
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">{today}</p>
       </div>
@@ -36,36 +38,98 @@ const GreetingWidget = memo(function GreetingWidget() {
   );
 });
 
-// ── Quick Capture ─────────────────────────────────────────────────────────────
+// ── Quick Capture ──────────────────────────────────────────────────────────────
 const QuickCaptureBar = memo(function QuickCaptureBar() {
   const [value, setValue] = useState("");
   const [hint, setHint] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const router = useRouter();
+  const workspaceId = useAppStore((s) => s.currentWorkspaceId);
+  const createPage = useMutation(api.pages.create);
+  const createReminder = useMutation(api.reminders.create);
 
   const detectIntent = (v: string) => {
-    if (v.startsWith("$")) return "💰 Add expense";
-    if (v.startsWith("!")) return "✅ Create task";
+    if (v.startsWith("$")) return "💰 Navigate to Ledger";
+    if (v.startsWith("!")) return "⏰ Create reminder";
     if (v.startsWith("#")) return "📝 Create note";
-    if (v.startsWith("http")) return "🔖 Save bookmark";
-    return "✨ AI will classify";
+    if (v.startsWith("http")) return "🔖 Open link";
+    return "📝 Create note";
   };
+
+  const handleSubmit = useCallback(async () => {
+    const trimmed = value.trim();
+    if (!trimmed || !workspaceId || submitting) return;
+    setSubmitting(true);
+
+    try {
+      // Open URL
+      if (trimmed.startsWith("http")) {
+        window.open(trimmed, "_blank", "noopener,noreferrer");
+        setValue("");
+        setHint("");
+        return;
+      }
+
+      // Navigate to Ledger for expenses
+      if (trimmed.startsWith("$")) {
+        toast.info("Opening Ledger — add your expense there");
+        router.push("/workspace/ledger");
+        setValue("");
+        setHint("");
+        return;
+      }
+
+      // Create reminder (! prefix)
+      if (trimmed.startsWith("!")) {
+        const title = trimmed.slice(1).trim() || "Reminder";
+        await createReminder({
+          workspaceId,
+          title,
+          remindAt: Date.now() + 60 * 60 * 1000, // 1 hour from now
+        });
+        toast.success(`Reminder set: "${title}" — in 1 hour`);
+        setValue("");
+        setHint("");
+        return;
+      }
+
+      // Create Brain page (# prefix or default)
+      const title = trimmed.startsWith("#") ? trimmed.slice(1).trim() : trimmed;
+      const pageId = await createPage({
+        workspaceId,
+        parentId: null,
+        type: "document",
+        title: title || "Untitled",
+      });
+      router.push(`/workspace/${pageId}`);
+      setValue("");
+      setHint("");
+    } catch {
+      toast.error("Failed to capture — try again");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [value, workspaceId, submitting, createPage, createReminder, router]);
 
   return (
     <div className="col-span-full">
-      <div className="relative flex items-center gap-2 bg-muted/50 border rounded-xl px-4 py-3 focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary/50 transition-all">
-        <Zap className="w-4 h-4 text-muted-foreground shrink-0" />
+      <div className="relative flex items-center gap-2 bg-muted/50 border rounded-xl px-4 min-h-[48px] focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary/50 transition-all">
+        {submitting
+          ? <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />
+          : <Zap className="w-4 h-4 text-muted-foreground shrink-0" />
+        }
         <input
-          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          placeholder="Quick capture… $15 coffee · !task name · #note · https://..."
+          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground py-3"
+          placeholder="Quick capture… ! reminder · # note · $ expense"
           value={value}
+          disabled={submitting}
           onChange={(e) => {
             setValue(e.target.value);
             setHint(e.target.value ? detectIntent(e.target.value) : "");
           }}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && value.trim()) {
-              setValue("");
-              setHint("");
-            }
+            if (e.key === "Enter") handleSubmit();
           }}
         />
         {hint && (
@@ -78,7 +142,7 @@ const QuickCaptureBar = memo(function QuickCaptureBar() {
   );
 });
 
-// ── Pomodoro Timer ────────────────────────────────────────────────────────────
+// ── Pomodoro Timer ─────────────────────────────────────────────────────────────
 const PomodoroWidget = memo(function PomodoroWidget() {
   const { focusActive, focusMinutes, focusStartedAt, startFocus, stopFocus } = useAppStore();
   const [elapsed, setElapsed] = useState(0);
@@ -140,8 +204,10 @@ const PomodoroWidget = memo(function PomodoroWidget() {
               key={m}
               onClick={() => useAppStore.getState().setFocusMinutes(m)}
               className={cn(
-                "flex-1 text-xs py-1 rounded-lg border transition-colors min-h-[36px]",
-                focusMinutes === m ? "bg-primary/10 border-primary text-primary" : "text-muted-foreground hover:bg-muted"
+                "flex-1 text-xs py-1 rounded-lg border transition-colors min-h-[40px]",
+                focusMinutes === m
+                  ? "bg-primary/10 border-primary text-primary"
+                  : "text-muted-foreground hover:bg-muted"
               )}
             >
               {m}m
@@ -153,7 +219,7 @@ const PomodoroWidget = memo(function PomodoroWidget() {
   );
 });
 
-// ── Habit Strip ───────────────────────────────────────────────────────────────
+// ── Habit Strip ────────────────────────────────────────────────────────────────
 const HabitStrip = memo(function HabitStrip() {
   const today = new Date().toISOString().slice(0, 10);
   const habits = useQuery(api.habits.listHabits);
@@ -188,7 +254,9 @@ const HabitStrip = memo(function HabitStrip() {
                   ? "bg-primary/10 border-primary/30 text-primary"
                   : "bg-muted/30 border-border text-muted-foreground hover:bg-muted/60"
               )}
-              onClick={() => logHabit({ habitId: habit._id, date: today, completed: !done })}
+              onClick={() =>
+                logHabit({ habitId: habit._id, date: today, completed: !done })
+              }
             >
               <span className="text-lg leading-none">{habit.icon}</span>
               <span className="text-[10px] font-medium truncate max-w-[56px] text-center leading-tight">
@@ -203,14 +271,16 @@ const HabitStrip = memo(function HabitStrip() {
   );
 });
 
-// ── Ledger Snapshot ───────────────────────────────────────────────────────────
+// ── Ledger Snapshot ────────────────────────────────────────────────────────────
 const LedgerSnapshot = memo(function LedgerSnapshot() {
   const router = useRouter();
   const month = new Date().toISOString().slice(0, 7);
   const data = useQuery(api.ledger.getDashboardData, { month });
 
   const fmt = (n: number) =>
-    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat("en-IN", {
+      style: "currency", currency: "INR", maximumFractionDigits: 0,
+    }).format(n);
 
   return (
     <div
@@ -252,7 +322,7 @@ const LedgerSnapshot = memo(function LedgerSnapshot() {
   );
 });
 
-// ── News Digest ───────────────────────────────────────────────────────────────
+// ── Feed Digest ────────────────────────────────────────────────────────────────
 const FeedDigest = memo(function FeedDigest() {
   const router = useRouter();
   const articles = useQuery(api.feed.getTopArticles, { limit: 3 });
@@ -273,7 +343,7 @@ const FeedDigest = memo(function FeedDigest() {
             <div key={i} className="h-4 bg-muted rounded animate-pulse" />
           ))
         ) : articles.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No articles yet — articles load soon</p>
+          <p className="text-xs text-muted-foreground">No articles yet — syncing soon</p>
         ) : (
           articles.map((a: any) => (
             <div key={a._id} className="flex items-start gap-2">
@@ -287,50 +357,69 @@ const FeedDigest = memo(function FeedDigest() {
   );
 });
 
-// ── AI Insight ────────────────────────────────────────────────────────────────
-const AIInsightWidget = memo(function AIInsightWidget() {
+// ── Today's Progress (replaces hardcoded AI Insight) ──────────────────────────
+const TodayProgressWidget = memo(function TodayProgressWidget() {
+  const today = new Date().toISOString().slice(0, 10);
+  const habits = useQuery(api.habits.listHabits);
+  const logs = useQuery(api.habits.getTodaysLogs, { date: today });
+
+  if (!habits || habits.length === 0) return null;
+
+  const completedCount = logs?.filter((l: any) => l.completed).length ?? 0;
+  const total = habits.length;
+  const pct = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+
+  const message =
+    pct === 100
+      ? "All habits done today — perfect day! 🎯"
+      : pct >= 60
+      ? `${completedCount}/${total} habits done. Keep the momentum! 💪`
+      : completedCount === 0
+      ? "Start your habits for today to build momentum ☀️"
+      : `${completedCount}/${total} habits done — you're making progress 🌱`;
+
   return (
     <div className="bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-pink-500/10 border border-violet-500/20 rounded-2xl p-4">
       <div className="flex items-center gap-2 mb-2">
         <Sparkles className="w-4 h-4 text-violet-500" />
-        <span className="text-xs font-medium text-violet-600 dark:text-violet-400 uppercase tracking-wide">Maddy's Insight</span>
+        <span className="text-xs font-medium text-violet-600 dark:text-violet-400 uppercase tracking-wide">
+          Today's Progress
+        </span>
+        <span className="ml-auto text-xs font-semibold text-violet-600 dark:text-violet-400">
+          {pct}%
+        </span>
       </div>
-      <p className="text-sm text-foreground/80 leading-relaxed">
-        You've been consistent with your morning review habit this week. Consider adding a "weekly review" session on Sunday to consolidate your learnings. 🎯
-      </p>
+      <p className="text-sm text-foreground/80 leading-relaxed">{message}</p>
+      <div className="mt-2.5 bg-muted/50 rounded-full h-1.5 overflow-hidden">
+        <div
+          className="h-full bg-violet-500 rounded-full transition-all duration-700"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 });
 
-// ── Main Overview Page ───────────────────────────────────────────────────────
+// ── Main Overview Page ────────────────────────────────────────────────────────
 export default memo(function OverviewPage() {
   return (
     <div className="min-h-full bg-background">
+      <WorkspaceTopBar moduleTitle="Overview" />
       <div className="max-w-5xl mx-auto px-4 py-6 md:px-6 md:py-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Greeting — full width */}
           <GreetingWidget />
-
-          {/* Quick Capture — full width */}
           <QuickCaptureBar />
-
-          {/* Habit strip — full width */}
           <HabitStrip />
 
-          {/* Ledger + Feed — 2-col on desktop, stacked on mobile */}
           <LedgerSnapshot />
           <FeedDigest />
 
-          {/* AI Insight — full width on mobile, 1-col on desktop */}
           <div className="md:col-span-1">
-            <AIInsightWidget />
+            <TodayProgressWidget />
           </div>
-
           <div className="md:col-span-1">
             <ReminderOverviewCard />
           </div>
-
-          {/* Pomodoro — full width on mobile, fits in grid on desktop */}
           <div className="md:col-span-1">
             <PomodoroWidget />
           </div>

@@ -1,34 +1,24 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import Image from "next/image";
 import { useMutation, useAction } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { AppIcon } from "@/components/ui/app-icon";
 import { ReminderTriggerButton } from "@/components/reminders/reminder-trigger-button";
 import { useAppStore } from "@/store/app.store";
 import { cn } from "@/lib/utils";
 import {
-  MoreHorizontal,
   Smile,
   Maximize2,
   Minimize2,
   Wand2,
   X,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
 
-// Lazy-load emoji picker (~80 KB) — only needed when user clicks the icon
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), {
   ssr: false,
   loading: () => (
@@ -38,30 +28,61 @@ const EmojiPicker = dynamic(() => import("emoji-picker-react"), {
 
 interface PageHeaderProps {
   page: any;
+  mobileToolbarOpen?: boolean;
+  onMobileToolbarToggle?: () => void;
 }
 
-export function PageHeader({ page }: PageHeaderProps) {
+export function PageHeader({ page, mobileToolbarOpen = false, onMobileToolbarToggle }: PageHeaderProps) {
   const updatePage = useMutation(api.pages.update);
   const tagPage = useAction(api.maddy.tagPage);
   const { geminiApiKey, maddyEnabled } = useAppStore();
 
-  const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(page.title);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [pickerPos, setPickerPos] = useState<{ top: number; left: number }>({ top: 120, left: 80 });
   const [tagging, setTagging] = useState(false);
-  const titleRef = useRef<HTMLInputElement>(null);
 
-  const handleTitleSave = useCallback(async () => {
-    setEditing(false);
-    if (title !== page.title) {
+  const titleAreaRef = useRef<HTMLDivElement>(null);
+  const titleSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestTitle = useRef(page.title);
+
+  // Keep local title in sync when server updates the page (e.g. switching pages)
+  useEffect(() => {
+    setTitle(page.title);
+    latestTitle.current = page.title;
+  }, [page._id]); // only reset when navigating to a different page
+
+  // Debounced title save — fires 600 ms after the user stops typing
+  const handleTitleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setTitle(value);
+      latestTitle.current = value;
+
+      if (titleSaveTimer.current) clearTimeout(titleSaveTimer.current);
+      titleSaveTimer.current = setTimeout(async () => {
+        if (latestTitle.current === page.title) return;
+        try {
+          await updatePage({ id: page._id, title: latestTitle.current });
+        } catch {
+          toast.error("Failed to save title");
+        }
+      }, 600);
+    },
+    [page._id, page.title, updatePage]
+  );
+
+  // Flush save immediately on blur (covers Tab-away)
+  const handleTitleBlur = useCallback(async () => {
+    if (titleSaveTimer.current) clearTimeout(titleSaveTimer.current);
+    if (latestTitle.current !== page.title) {
       try {
-        await updatePage({ id: page._id, title });
+        await updatePage({ id: page._id, title: latestTitle.current });
       } catch {
-        toast.error("Failed to update title");
-        setTitle(page.title);
+        toast.error("Failed to save title");
       }
     }
-  }, [title, page.title, page._id, updatePage]);
+  }, [page._id, page.title, updatePage]);
 
   const handleFavourite = useCallback(async () => {
     try {
@@ -83,18 +104,32 @@ export function PageHeader({ page }: PageHeaderProps) {
     await updatePage({ id: page._id, coverImage: null });
   }, [page._id, updatePage]);
 
-  const handleEmojiSelect = useCallback(async (emojiData: any) => {
-    setShowEmoji(false);
-    try {
-      await updatePage({ id: page._id, icon: emojiData.emoji });
-    } catch {
-      toast.error("Failed to set icon");
-    }
-  }, [page._id, updatePage]);
+  const handleEmojiSelect = useCallback(
+    async (emojiData: any) => {
+      setShowEmoji(false);
+      try {
+        await updatePage({ id: page._id, icon: emojiData.emoji });
+      } catch {
+        toast.error("Failed to set icon");
+      }
+    },
+    [page._id, updatePage]
+  );
 
   const handleRemoveIcon = useCallback(async () => {
     await updatePage({ id: page._id, icon: null });
   }, [page._id, updatePage]);
+
+  const openPicker = useCallback(() => {
+    if (titleAreaRef.current) {
+      const rect = titleAreaRef.current.getBoundingClientRect();
+      setPickerPos({
+        top: Math.min(rect.top + 80, window.innerHeight - 450),
+        left: Math.max(rect.left, 8),
+      });
+    }
+    setShowEmoji(true);
+  }, []);
 
   const handleAutoTag = useCallback(async () => {
     if (!geminiApiKey) {
@@ -104,7 +139,9 @@ export function PageHeader({ page }: PageHeaderProps) {
     setTagging(true);
     try {
       const result = await tagPage({ pageId: page._id, geminiApiKey });
-      toast.success(`Tagged: ${(result as any).tags?.join(", ") || "done"}`);
+      toast.success(
+        `Tagged: ${(result as any).tags?.join(", ") || "done"}`
+      );
     } catch {
       toast.error("Tagging failed");
     } finally {
@@ -112,11 +149,84 @@ export function PageHeader({ page }: PageHeaderProps) {
     }
   }, [geminiApiKey, page._id, tagPage]);
 
+  // Shared toolbar actions list (reused on desktop hover + mobile menu)
+  const toolbarActions = (
+    <>
+      {!page.icon && (
+        <button
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded hover:bg-accent/50 transition-colors text-xs whitespace-nowrap"
+          onClick={() => { openPicker(); onMobileToolbarToggle?.(); }}
+        >
+          <Smile className="w-3.5 h-3.5" /> Add icon
+        </button>
+      )}
+      {page.icon && (
+        <button
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded hover:bg-accent/50 transition-colors text-xs whitespace-nowrap"
+          onClick={() => { openPicker(); onMobileToolbarToggle?.(); }}
+        >
+          <Smile className="w-3.5 h-3.5" /> Change icon
+        </button>
+      )}
+      {page.icon && (
+        <button
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded hover:bg-accent/50 transition-colors text-xs whitespace-nowrap"
+          onClick={() => { handleRemoveIcon(); onMobileToolbarToggle?.(); }}
+        >
+          <X className="w-3.5 h-3.5" /> Remove icon
+        </button>
+      )}
+      {maddyEnabled && (
+        <button
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded hover:bg-accent/50 transition-colors text-xs text-foreground whitespace-nowrap"
+          onClick={() => { handleAutoTag(); onMobileToolbarToggle?.(); }}
+          disabled={tagging}
+        >
+          <Wand2 className="w-3.5 h-3.5" />
+          {tagging ? "Tagging…" : "Auto-tag"}
+        </button>
+      )}
+      <ReminderTriggerButton
+        workspaceId={page.workspaceId}
+        label="Remind me"
+        className="px-2.5 py-2 text-xs"
+        initialValues={{
+          title: page.title ? `Review ${page.title}` : "Review page",
+          pageId: page._id,
+          sourceLabel: page.title || "Page",
+          sourceUrl: `/workspace/${page._id}`,
+        }}
+      />
+      <button
+        className="flex items-center gap-1.5 px-2.5 py-2 rounded hover:bg-accent/50 transition-colors text-xs whitespace-nowrap"
+        onClick={() => { handleFavourite(); onMobileToolbarToggle?.(); }}
+      >
+        <AppIcon className="w-3.5 h-3.5 rounded-sm" />
+        {page.isFavourite ? "Unfavourite" : "Favourite"}
+      </button>
+      <button
+        className="flex items-center gap-1.5 px-2.5 py-2 rounded hover:bg-accent/50 transition-colors text-xs whitespace-nowrap"
+        onClick={() => { handleFullWidth(); onMobileToolbarToggle?.(); }}
+      >
+        {page.isFullWidth ? (
+          <><Minimize2 className="w-3.5 h-3.5" /> Full width off</>
+        ) : (
+          <><Maximize2 className="w-3.5 h-3.5" /> Full width</>
+        )}
+      </button>
+    </>
+  );
+
   return (
-    <div className={cn("relative", page.isFullWidth ? "max-w-none" : "max-w-3xl mx-auto")}>
-      {/* Cover image */}
+    <div
+      className={cn(
+        "relative",
+        page.isFullWidth ? "max-w-none" : "max-w-3xl mx-auto"
+      )}
+    >
+      {/* Cover image — margin matches parent container padding */}
       {page.coverImage && (
-        <div className="relative w-full h-48 -mx-8 mb-4 overflow-hidden">
+        <div className="relative w-full h-36 md:h-48 -mx-4 md:-mx-8 mb-4 overflow-hidden">
           <Image
             src={page.coverImage}
             alt="cover"
@@ -135,113 +245,49 @@ export function PageHeader({ page }: PageHeaderProps) {
       )}
 
       {/* Icon + title area */}
-      <div className="group relative pt-8">
-        {/* Icon */}
+      <div ref={titleAreaRef} className="group relative pt-6 md:pt-8">
+        {/* Page icon */}
         {page.icon && (
           <div className="relative inline-block mb-2">
-            <span className="text-5xl leading-none cursor-pointer" onClick={() => setShowEmoji(true)}>
+            <span
+              className="text-4xl md:text-5xl leading-none cursor-pointer"
+              onClick={openPicker}
+            >
               {page.icon}
             </span>
-            {showEmoji && (
-              <div className="absolute top-full left-0 z-50 mt-1">
-                <EmojiPicker onEmojiClick={handleEmojiSelect} />
-              </div>
-            )}
           </div>
         )}
 
-        {/* Hover toolbar above title */}
-        <div className="hidden group-hover:flex items-center gap-1 mb-2 text-xs text-muted-foreground">
-          {!page.icon && (
-            <button
-              className="flex items-center gap-1 px-2 py-1 rounded hover:bg-accent/50 transition-colors"
-              onClick={() => setShowEmoji(!showEmoji)}
-            >
-              <Smile className="w-3.5 h-3.5" /> Add icon
-            </button>
-          )}
-          {page.icon && (
-            <button
-              className="flex items-center gap-1 px-2 py-1 rounded hover:bg-accent/50 transition-colors"
-              onClick={handleRemoveIcon}
-            >
-              <X className="w-3.5 h-3.5" /> Remove icon
-            </button>
-          )}
-          {maddyEnabled && (
-            <button
-              className="flex items-center gap-1 px-2 py-1 rounded hover:bg-accent/50 transition-colors text-foreground"
-              onClick={handleAutoTag}
-              disabled={tagging}
-            >
-              <Wand2 className="w-3.5 h-3.5" />
-              {tagging ? "Tagging…" : "Auto-tag"}
-            </button>
-          )}
-          <ReminderTriggerButton
-            workspaceId={page.workspaceId}
-            label="Remind me"
-            className="px-2 py-1"
-            initialValues={{
-              title: page.title ? `Review ${page.title}` : "Review page",
-              pageId: page._id,
-              sourceLabel: page.title || "Page",
-              sourceUrl: `/workspace/${page._id}`,
-            }}
-          />
-          <button
-            className="flex items-center gap-1 px-2 py-1 rounded hover:bg-accent/50 transition-colors"
-            onClick={handleFavourite}
-          >
-            {page.isFavourite ? (
-              <>
-                <AppIcon className="w-3.5 h-3.5 rounded-sm" /> Unfavourite
-              </>
-            ) : (
-              <>
-                <AppIcon className="w-3.5 h-3.5 rounded-sm" /> Favourite
-              </>
-            )}
-          </button>
-          <button
-            className="flex items-center gap-1 px-2 py-1 rounded hover:bg-accent/50 transition-colors"
-            onClick={handleFullWidth}
-          >
-            {page.isFullWidth ? (
-              <><Minimize2 className="w-3.5 h-3.5" /> Full width off</>
-            ) : (
-              <><Maximize2 className="w-3.5 h-3.5" /> Full width</>
-            )}
-          </button>
+        {/* Desktop hover toolbar */}
+        <div className="hidden group-hover:flex items-center flex-wrap gap-1 mb-2 text-xs text-muted-foreground">
+          {toolbarActions}
         </div>
 
-        {/* Title */}
-        {editing ? (
-          <Input
-            ref={titleRef}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={handleTitleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleTitleSave();
-              if (e.key === "Escape") {
-                setTitle(page.title);
-                setEditing(false);
-              }
-            }}
-            className="text-4xl font-bold border-none shadow-none focus-visible:ring-0 p-0 h-auto bg-transparent text-foreground"
-            autoFocus
-          />
-        ) : (
-          <h1
-            className="text-4xl font-bold cursor-text hover:text-foreground/80 transition-colors min-h-[1.2em] empty:before:content-['Untitled'] empty:before:text-muted-foreground/40"
-            onClick={() => setEditing(true)}
-          >
-            {page.title || (
-              <span className="text-muted-foreground/40">Untitled</span>
-            )}
-          </h1>
+        {/* Mobile expanded toolbar (toggle lives in the top bar) */}
+        {mobileToolbarOpen && (
+          <div className="flex md:hidden flex-wrap gap-1 mb-3 p-2 rounded-xl border border-border/60 bg-muted/20 text-xs text-muted-foreground animate-fade-in-fast">
+            {toolbarActions}
+          </div>
         )}
+
+        {/* Title — responsive font size */}
+        <input
+          value={title}
+          onChange={handleTitleChange}
+          onBlur={handleTitleBlur}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          placeholder="Untitled"
+          className={cn(
+            "w-full text-2xl sm:text-3xl md:text-4xl font-bold bg-transparent border-none outline-none",
+            "placeholder:text-muted-foreground/40 text-foreground",
+            "focus:ring-0 focus:outline-none"
+          )}
+        />
 
         {/* Tags */}
         {page.maddyTags && page.maddyTags.length > 0 && (
@@ -258,10 +304,20 @@ export function PageHeader({ page }: PageHeaderProps) {
         )}
       </div>
 
-      {/* Emoji picker overlay closer */}
+      {/* Emoji picker — fixed positioned to avoid z-index/overflow issues */}
       {showEmoji && (
         <div
-          className="fixed inset-0 z-40"
+          className="fixed z-[9999]"
+          style={{ top: pickerPos.top, left: pickerPos.left }}
+        >
+          <EmojiPicker onEmojiClick={handleEmojiSelect} />
+        </div>
+      )}
+
+      {/* Backdrop — closes emoji picker when clicking outside */}
+      {showEmoji && (
+        <div
+          className="fixed inset-0 z-[9998]"
           onClick={() => setShowEmoji(false)}
         />
       )}

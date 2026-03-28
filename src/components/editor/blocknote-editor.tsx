@@ -1,21 +1,38 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
-import { useCreateBlockNote } from "@blocknote/react";
+import { useEffect, useRef, useCallback, useState } from "react";
+import { SideMenuController, useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
 import { useMutation, useQuery } from "convex/react";
-import { Redo2, Undo2 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useTheme } from "next-themes";
-import { Button } from "@/components/ui/button";
 import { cn, sanitizeForConvex } from "@/lib/utils";
+import { useEditorStore } from "@/store/editor.store";
+import { toast } from "sonner";
+import { NotionSideMenu } from "./notion-block-side-menu";
 
 interface BlockNoteEditorProps {
   pageId: Id<"pages">;
   editable?: boolean;
   isFullWidth?: boolean;
+}
+
+// Shimmer lines shown while blocks are loading
+function EditorSkeleton() {
+  return (
+    <div className="space-y-3 pt-1 animate-fade-in-fast">
+      <div className="skeleton-shimmer h-5 w-3/4 rounded-md" />
+      <div className="skeleton-shimmer h-4 w-full rounded-md" />
+      <div className="skeleton-shimmer h-4 w-5/6 rounded-md" />
+      <div className="skeleton-shimmer h-4 w-4/5 rounded-md" />
+      <div className="skeleton-shimmer h-4 w-full rounded-md" />
+      <div className="skeleton-shimmer h-4 w-2/3 rounded-md" />
+      <div className="skeleton-shimmer h-4 w-11/12 rounded-md" />
+      <div className="skeleton-shimmer h-4 w-3/5 rounded-md" />
+    </div>
+  );
 }
 
 export function BlockNoteEditor({
@@ -25,103 +42,183 @@ export function BlockNoteEditor({
 }: BlockNoteEditorProps) {
   const { resolvedTheme } = useTheme();
 
-  // Load blocks from Convex
   const blocks = useQuery(api.blocks.listByPage, { pageId });
-  const replaceAll = useMutation(api.blocks.replaceAll);
+  const upsert = useMutation(api.blocks.upsert);
+
+  const { setDirty, setSaving, setSaveStatus } = useEditorStore();
 
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialized = useRef(false);
+  const blockId = useRef<Id<"blocks"> | null>(null);
+  const hasPendingSave = useRef(false);
+  const mountedPageId = useRef<string>(pageId);
 
-  // Create BlockNote editor instance
+  // true = show shimmer, false = show editor
+  const [isLoadingContent, setIsLoadingContent] = useState(true);
+  const savedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const editor = useCreateBlockNote({
     initialContent: undefined,
+    setIdAttribute: true,
   });
 
-  // Load initial content from Convex
+  // ── Reset state when navigating to a different page ──────────────────────
+  useEffect(() => {
+    if (mountedPageId.current === pageId) return;
+    mountedPageId.current = pageId;
+
+    // Flush any pending save timer for the previous page
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+
+    isInitialized.current = false;
+    blockId.current = null;
+    hasPendingSave.current = false;
+    setSaveStatus("idle");
+    setDirty(false);
+    // Show shimmer while new page's blocks load
+    setIsLoadingContent(true);
+  }, [pageId, setDirty, setSaveStatus]);
+
+  // ── Load content once blocks arrive ──────────────────────────────────────
   useEffect(() => {
     if (!blocks || isInitialized.current) return;
     isInitialized.current = true;
 
     if (blocks.length > 0) {
+      blockId.current = blocks[0]._id;
       try {
-        // The content stored is BlockNote block JSON
-        const blockContent = blocks[0]?.content;
-        if (
-          blockContent &&
-          typeof blockContent === "object" &&
-          Array.isArray(blockContent)
-        ) {
+        let blockContent = blocks[0]?.content;
+        if (typeof blockContent === "string") {
+          blockContent = JSON.parse(blockContent);
+        }
+        if (blockContent && Array.isArray(blockContent)) {
           editor.replaceBlocks(editor.document, blockContent as any);
         }
       } catch (e) {
-        // If content parse fails, leave blank
-        console.warn("Could not load blocks:", e);
+        // Silently fall back to empty editor
       }
     }
+
+    // Brief delay lets BlockNote finish rendering before we reveal it
+    const t = setTimeout(() => setIsLoadingContent(false), 60);
+    return () => clearTimeout(t);
   }, [blocks, editor]);
 
-  // Debounced auto-save
+  // ── beforeunload guard ────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasPendingSave.current) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
+  // ── Cleanup on unmount ────────────────────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (saveTimeout.current) clearTimeout(saveTimeout.current);
+      if (savedTimeout.current) clearTimeout(savedTimeout.current);
+    };
+  }, []);
+
+  const scrollToHashTarget = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    const blockId = decodeURIComponent(window.location.hash.replace(/^#/, ""));
+    if (!blockId) return;
+
+    const target = document.getElementById(blockId);
+    if (!target) return;
+
+    window.requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.classList.add("blocknote-anchor-target");
+
+      window.setTimeout(() => {
+        target.classList.remove("blocknote-anchor-target");
+      }, 1600);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    window.addEventListener("hashchange", scrollToHashTarget);
+    return () => window.removeEventListener("hashchange", scrollToHashTarget);
+  }, [scrollToHashTarget]);
+
+  useEffect(() => {
+    if (isLoadingContent) return;
+
+    const timeout = window.setTimeout(scrollToHashTarget, 80);
+    return () => window.clearTimeout(timeout);
+  }, [isLoadingContent, pageId, scrollToHashTarget]);
+
+  // ── Debounced auto-save ───────────────────────────────────────────────────
   const handleChange = useCallback(() => {
     if (!isInitialized.current) return;
 
-    if (saveTimeout.current) {
-      clearTimeout(saveTimeout.current);
-    }
+    hasPendingSave.current = true;
+    setDirty(true);
+    setSaveStatus("saving");
+
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    if (savedTimeout.current) clearTimeout(savedTimeout.current);
 
     saveTimeout.current = setTimeout(async () => {
+      setSaving(true);
       try {
         const editorBlocks = editor.document;
-        await replaceAll({
+        await upsert({
+          id: blockId.current ?? undefined,
           pageId,
-          blocks: [
-            {
-              type: "document",
-              content: sanitizeForConvex(editorBlocks),
-              sortOrder: 1000,
-              properties: {},
-            },
-          ],
+          type: "document",
+          content: sanitizeForConvex(editorBlocks),
+          sortOrder: 1000,
+          properties: {},
         });
-      } catch (e) {
-        console.error("Auto-save failed:", e);
+        hasPendingSave.current = false;
+        setDirty(false);
+        setSaveStatus("saved");
+        savedTimeout.current = setTimeout(() => setSaveStatus("idle"), 2000);
+      } catch {
+        setSaveStatus("error");
+        toast.error("Failed to save — check your connection");
+      } finally {
+        setSaving(false);
       }
-    }, 1500);
-  }, [editor, pageId, replaceAll]);
+    }, 500);
+  }, [editor, pageId, upsert, setDirty, setSaving, setSaveStatus]);
 
   return (
     <div className={cn("blocknote-wrapper w-full min-h-[calc(100vh-200px)]", isFullWidth && "full-width-editor")}>
-      {editable && (
-        <div className="mb-3 flex items-center justify-end gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 text-xs text-zinc-300 hover:bg-white/[0.06] hover:text-white"
-            onClick={() => editor.undo()}
-          >
-            <Undo2 className="mr-1.5 h-3.5 w-3.5" />
-            Undo
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 text-xs text-zinc-300 hover:bg-white/[0.06] hover:text-white"
-            onClick={() => editor.redo()}
-          >
-            <Redo2 className="mr-1.5 h-3.5 w-3.5" />
-            Redo
-          </Button>
-        </div>
-      )}
 
-      <BlockNoteView
-        editor={editor}
-        theme={resolvedTheme === "dark" ? "dark" : "light"}
-        editable={editable}
-        onChange={handleChange}
-        className="prose-editor"
-      />
+      {/* Shimmer overlay while content loads — covers editor without unmounting it */}
+      <div className={cn(
+        "transition-opacity duration-200",
+        isLoadingContent ? "block" : "hidden"
+      )}>
+        <EditorSkeleton />
+      </div>
+
+      <div className={cn(
+        "transition-opacity duration-150",
+        isLoadingContent ? "opacity-0 h-0 overflow-hidden" : "opacity-100"
+      )}>
+        <BlockNoteView
+          editor={editor}
+          theme={resolvedTheme === "dark" ? "dark" : "light"}
+          editable={editable}
+          onChange={handleChange}
+          className="prose-editor"
+          sideMenu={false}
+        >
+          <SideMenuController sideMenu={NotionSideMenu} />
+        </BlockNoteView>
+      </div>
     </div>
   );
 }

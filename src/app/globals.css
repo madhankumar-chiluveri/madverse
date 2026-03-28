@@ -139,6 +139,111 @@
   color: hsl(var(--foreground));
 }
 
+.blocknote-wrapper .bn-side-menu {
+  gap: 4px;
+}
+
+.blocknote-wrapper .bn-side-menu .mantine-UnstyledButton-root:not(.mantine-Menu-item) {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  color: hsl(var(--muted-foreground));
+  transition:
+    background-color 0.15s linear,
+    color 0.15s linear,
+    transform 0.15s linear;
+}
+
+.blocknote-wrapper .bn-side-menu .mantine-UnstyledButton-root:not(.mantine-Menu-item):hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+  transform: translateY(-1px);
+}
+
+.blocknote-wrapper .bn-side-menu .mantine-UnstyledButton-root:not(.mantine-Menu-item) svg {
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+}
+
+.blocknote-wrapper .bn-drag-handle-menu,
+.blocknote-wrapper .notion-block-menu {
+  min-width: 260px;
+  max-width: 320px;
+  padding: 6px;
+  border: 1px solid hsl(var(--border) / 0.85);
+  border-radius: 16px;
+  background: hsl(var(--card) / 0.96);
+  backdrop-filter: blur(20px);
+  box-shadow:
+    0 22px 50px -24px hsl(var(--foreground) / 0.45),
+    0 10px 24px -18px hsl(var(--foreground) / 0.35);
+}
+
+.blocknote-wrapper .bn-drag-handle-menu .mantine-Menu-label,
+.blocknote-wrapper .notion-block-menu__title {
+  padding: 6px 8px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.blocknote-wrapper .bn-drag-handle-menu .mantine-Menu-item,
+.blocknote-wrapper .notion-block-menu .mantine-Menu-item {
+  min-height: 34px;
+  margin: 1px 0;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+.blocknote-wrapper .bn-drag-handle-menu .mantine-Menu-item:hover,
+.blocknote-wrapper .bn-drag-handle-menu .mantine-Menu-item[data-hovered],
+.blocknote-wrapper .notion-block-menu .mantine-Menu-item:hover,
+.blocknote-wrapper .notion-block-menu .mantine-Menu-item[data-hovered] {
+  background: hsl(var(--accent));
+}
+
+.blocknote-wrapper .bn-drag-handle-menu .mantine-Menu-itemSection,
+.blocknote-wrapper .notion-block-menu .mantine-Menu-itemSection {
+  color: hsl(var(--muted-foreground));
+}
+
+.blocknote-wrapper .notion-block-menu__item--danger {
+  color: hsl(var(--destructive));
+}
+
+.blocknote-wrapper .notion-block-menu__item--danger .mantine-Menu-itemSection {
+  color: hsl(var(--destructive));
+}
+
+.blocknote-wrapper .notion-block-menu__divider {
+  margin: 6px 4px;
+  border-color: hsl(var(--border) / 0.75);
+}
+
+.blocknote-wrapper .notion-block-menu__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.blocknote-wrapper .notion-block-menu__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--muted-foreground));
+}
+
+.blocknote-wrapper .blocknote-anchor-target {
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px hsl(var(--ring) / 0.35);
+  animation: blocknote-anchor-flash 1.4s ease-out;
+}
+
 /* ── Prose / typography ───────────────────────────────────────────────────── */
 .prose-editor {
   @apply text-foreground;
@@ -148,6 +253,34 @@
 [data-accent="grayscale"] {
   --primary: 0 0% 0%;
   --ring: 0 0% 0%;
+}
+
+/* ── Shimmer skeleton animation ───────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Use on any element you want to shimmer.
+   Works in both light and dark mode via CSS variables. */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background-color: hsl(var(--muted));
+}
+
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    hsl(var(--muted-foreground) / 0.1) 50%,
+    transparent 100%
+  );
+  animation: shimmer 1.6s ease-in-out infinite;
 }
 
 /* ── Animations ───────────────────────────────────────────────────────────── */
@@ -161,12 +294,34 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes fade-in-fast {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes blocknote-anchor-flash {
+  0% {
+    box-shadow:
+      0 0 0 1px hsl(var(--ring) / 0.35),
+      0 0 0 0 hsl(var(--ring) / 0.25);
+  }
+  100% {
+    box-shadow:
+      0 0 0 1px transparent,
+      0 0 0 10px transparent;
+  }
+}
+
 .animate-slide-in {
   animation: slide-in-from-right 0.2s ease-out;
 }
 
 .animate-fade-in {
   animation: fade-in 0.15s ease-out;
+}
+
+.animate-fade-in-fast {
+  animation: fade-in-fast 0.12s ease-out;
 }
 
 /* ── PWA safe areas ───────────────────────────────────────────────────────── */

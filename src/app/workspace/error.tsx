@@ -10,7 +10,7 @@ export default function WorkspaceError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[WorkspaceError]", error);
+    // Error is captured by Next.js error boundary — no console noise in production
   }, [error]);
 
   return (

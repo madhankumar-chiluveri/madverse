@@ -13,6 +13,7 @@ import {
   TrendingUp, TrendingDown, Wallet, Plus, ArrowUpRight,
   ArrowDownRight, PiggyBank, Target, ChevronRight, BarChart2,
 } from "lucide-react";
+import { WorkspaceTopBar } from "@/components/workspace/workspace-top-bar";
 
 // ── Currency formatter ────────────────────────────────────────────────────────
 const fmt = (n: number) =>
@@ -426,35 +427,12 @@ export default function LedgerPage() {
 
   return (
     <div className="min-h-full bg-background">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b">
-        <div className="max-w-5xl mx-auto px-4 py-3">
-          <h1 className="text-lg font-bold tracking-tight flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-muted-foreground" /> LEDGER
-          </h1>
-        </div>
-        {/* Tab bar — scrollable on mobile */}
-        <div className="max-w-5xl mx-auto px-4 pb-2 md:hidden">
+      {/* Workspace top bar */}
+      <WorkspaceTopBar moduleTitle="Ledger" />
+      {/* Tab bar */}
+      <div className="sticky top-[41px] z-10 bg-background/95 backdrop-blur border-b">
+        <div className="max-w-5xl mx-auto px-4 py-2">
           <div className="flex gap-1 overflow-x-auto scrollbar-hide">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={cn(
-                  "shrink-0 text-xs font-medium px-4 py-2 rounded-lg transition-all min-h-[36px]",
-                  ledgerTab === tab.id
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted"
-                )}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        {/* Desktop tab bar */}
-        <div className="max-w-5xl mx-auto px-4 pb-2 hidden md:block">
-          <div className="flex gap-1">
             {TABS.map((tab) => (
               <button
                 key={tab.id}

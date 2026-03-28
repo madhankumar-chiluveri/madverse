@@ -6,8 +6,10 @@ export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
-export function sanitizeForConvex(data: any): string {
-    return JSON.stringify(data);
+export function sanitizeForConvex(data: any): any {
+    // Deep clone via JSON round-trip to strip undefined/non-serializable values
+    // while keeping the object structure intact (NOT converting to a string)
+    return JSON.parse(JSON.stringify(data));
 }
 
 export const ACCENT_COLORS = [

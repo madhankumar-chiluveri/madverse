@@ -5,9 +5,8 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-import {
-  BookmarkCheck, Rss, Clock, TrendingUp, Flame,
-} from "lucide-react";
+import { Rss, Clock, TrendingUp, Flame } from "lucide-react";
+import { WorkspaceTopBar } from "@/components/workspace/workspace-top-bar";
 
 // ── Category config ─────────────────────────────────────────────────────────
 const CATEGORIES = [
@@ -18,9 +17,35 @@ const CATEGORIES = [
   { id: "must_know", label: "Must Know", color: "bg-orange-500/20 text-orange-700 dark:text-orange-400" },
 ] as const;
 
-// ── Article Card ──────────────────────────────────────────────────────────────
+type Category = typeof CATEGORIES[number];
+
+function getCategoryGradient(category: string | null) {
+  switch (category) {
+    case "ai_ml":       return "from-blue-600/30 via-violet-500/20 to-purple-600/30";
+    case "tech_it":     return "from-cyan-600/30 via-teal-500/20 to-emerald-600/30";
+    case "productivity": return "from-emerald-600/30 via-green-500/20 to-lime-600/30";
+    case "must_know":   return "from-orange-600/30 via-amber-500/20 to-yellow-600/30";
+    default:            return "from-violet-600/30 via-pink-500/20 to-rose-600/30";
+  }
+}
+
+function getCategoryGradientSmall(category: string | null) {
+  switch (category) {
+    case "ai_ml":       return "from-blue-500/30 to-violet-500/30";
+    case "tech_it":     return "from-cyan-500/30 to-teal-500/30";
+    case "productivity": return "from-emerald-500/30 to-green-500/30";
+    default:            return "from-violet-500/30 to-pink-500/30";
+  }
+}
+
+function openArticle(url?: string) {
+  if (url) window.open(url, "_blank", "noopener,noreferrer");
+}
+
+// ── Article Card (desktop) ────────────────────────────────────────────────────
 const ArticleCard = memo(function ArticleCard({ article }: { article: any }) {
   const catConfig = CATEGORIES.find((c) => c.id === article.category) ?? CATEGORIES[0];
+
   const publishedAgo = () => {
     const diff = Date.now() - article.publishedAt;
     const h = Math.floor(diff / 3_600_000);
@@ -29,17 +54,20 @@ const ArticleCard = memo(function ArticleCard({ article }: { article: any }) {
   };
 
   return (
-    <div className="group bg-card border rounded-2xl overflow-hidden hover:shadow-md hover:border-primary/30 transition-all cursor-pointer">
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={() => openArticle(article.url)}
+      onKeyDown={(e) => e.key === "Enter" && openArticle(article.url)}
+      className="group bg-card border rounded-2xl overflow-hidden hover:shadow-md hover:border-primary/30 transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       {/* Gradient thumbnail */}
-      <div className={cn(
-        "h-28 md:h-36 relative overflow-hidden",
-        "bg-gradient-to-br",
-        article.category === "ai_ml" ? "from-blue-600/30 via-violet-500/20 to-purple-600/30" :
-          article.category === "tech_it" ? "from-cyan-600/30 via-teal-500/20 to-emerald-600/30" :
-            article.category === "productivity" ? "from-emerald-600/30 via-green-500/20 to-lime-600/30" :
-              article.category === "must_know" ? "from-orange-600/30 via-amber-500/20 to-yellow-600/30" :
-                "from-violet-600/30 via-pink-500/20 to-rose-600/30"
-      )}>
+      <div
+        className={cn(
+          "h-28 md:h-36 relative overflow-hidden bg-gradient-to-br",
+          getCategoryGradient(article.category)
+        )}
+      >
         {article.isBreaking && (
           <div className="absolute top-2 left-2 flex items-center gap-1 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
             <Flame className="w-2.5 h-2.5" /> BREAKING
@@ -80,19 +108,24 @@ const ArticleCard = memo(function ArticleCard({ article }: { article: any }) {
   );
 });
 
-// ── Mobile Article Row ────────────────────────────────────────────────────────
+// ── Article Row (mobile) ──────────────────────────────────────────────────────
 const ArticleRow = memo(function ArticleRow({ article }: { article: any }) {
   const catConfig = CATEGORIES.find((c) => c.id === article.category) ?? CATEGORIES[0];
+
   return (
-    <div className="flex gap-3 p-3 bg-card border rounded-xl hover:border-primary/30 transition-all cursor-pointer">
-      <div className={cn(
-        "w-16 h-16 rounded-lg shrink-0",
-        "bg-gradient-to-br",
-        article.category === "ai_ml" ? "from-blue-500/30 to-violet-500/30" :
-          article.category === "tech_it" ? "from-cyan-500/30 to-teal-500/30" :
-            article.category === "productivity" ? "from-emerald-500/30 to-green-500/30" :
-              "from-violet-500/30 to-pink-500/30"
-      )} />
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={() => openArticle(article.url)}
+      onKeyDown={(e) => e.key === "Enter" && openArticle(article.url)}
+      className="flex gap-3 p-3 bg-card border rounded-xl hover:border-primary/30 transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <div
+        className={cn(
+          "w-16 h-16 rounded-lg shrink-0 bg-gradient-to-br",
+          getCategoryGradientSmall(article.category)
+        )}
+      />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full", catConfig.color)}>
@@ -103,19 +136,21 @@ const ArticleRow = memo(function ArticleRow({ article }: { article: any }) {
           )}
         </div>
         <p className="text-sm font-medium line-clamp-2 leading-snug">{article.title}</p>
-        <p className="text-[11px] text-muted-foreground mt-1">{article.source} · {article.readingTimeMinutes ?? 3}m</p>
+        <p className="text-[11px] text-muted-foreground mt-1">
+          {article.source} · {article.readingTimeMinutes ?? 3}m
+        </p>
       </div>
     </div>
   );
 });
 
-// ── Category Tab Button ────────────────────────────────────────────────────────
+// ── Category Tab ──────────────────────────────────────────────────────────────
 const CategoryTab = memo(function CategoryTab({
   cat,
   activeCategory,
-  onClick
+  onClick,
 }: {
-  cat: typeof CATEGORIES[number];
+  cat: Category;
   activeCategory: string | null;
   onClick: () => void;
 }) {
@@ -134,7 +169,7 @@ const CategoryTab = memo(function CategoryTab({
   );
 });
 
-// ── Main News Page ───────────────────────────────────────────────────────────
+// ── Main Feed Page ───────────────────────────────────────────────────────────
 export default memo(function FeedPage() {
   const { feedCategory, setFeedCategory } = useAppStore();
   const articles = useQuery(api.feed.listArticles, {
@@ -144,14 +179,11 @@ export default memo(function FeedPage() {
 
   return (
     <div className="min-h-full bg-background">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center">
-          <h1 className="text-lg font-bold tracking-tight">FEED</h1>
-        </div>
-
-        {/* Category tabs — horizontally scrollable */}
-        <div className="max-w-6xl mx-auto px-4 pb-2 md:hidden">
+      {/* Sticky top bar */}
+      <WorkspaceTopBar moduleTitle="Feed" />
+      {/* Category tabs */}
+      <div className="sticky top-[41px] z-10 bg-background/95 backdrop-blur border-b">
+        <div className="max-w-6xl mx-auto px-4 py-2">
           <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
             {CATEGORIES.map((cat) => (
               <CategoryTab
@@ -161,12 +193,6 @@ export default memo(function FeedPage() {
                 onClick={() => setFeedCategory(cat.id)}
               />
             ))}
-            <button className={cn(
-              "shrink-0 flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full border transition-all min-h-[36px]",
-              "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
-            )}>
-              <BookmarkCheck className="w-3 h-3" /> Saved
-            </button>
           </div>
         </div>
       </div>
@@ -175,13 +201,11 @@ export default memo(function FeedPage() {
       <div className="max-w-6xl mx-auto px-4 py-4 md:py-6">
         {articles === undefined ? (
           <>
-            {/* Desktop skeleton */}
             <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 gap-4">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="bg-muted rounded-2xl h-64 animate-pulse" />
               ))}
             </div>
-            {/* Mobile skeleton */}
             <div className="md:hidden space-y-3">
               {[...Array(5)].map((_, i) => (
                 <div key={i} className="bg-muted rounded-xl h-20 animate-pulse" />
@@ -193,18 +217,16 @@ export default memo(function FeedPage() {
             <Rss className="w-12 h-12 text-muted-foreground/30 mb-4" />
             <h3 className="text-lg font-medium text-muted-foreground">No articles yet</h3>
             <p className="text-sm text-muted-foreground/60 mt-1 max-w-xs">
-              Demo articles will load shortly once your feed is ready.
+              Articles load automatically every 3 hours once API keys are configured.
             </p>
           </div>
         ) : (
           <>
-            {/* Desktop — card grid */}
             <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 gap-4">
               {articles.map((article: any) => (
                 <ArticleCard key={article._id} article={article} />
               ))}
             </div>
-            {/* Mobile — list */}
             <div className="md:hidden space-y-3">
               {articles.map((article: any) => (
                 <ArticleRow key={article._id} article={article} />

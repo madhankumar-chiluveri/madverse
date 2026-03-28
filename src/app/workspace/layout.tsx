@@ -5,9 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar/sidebar";
 import { CommandPalette } from "@/components/layout/command-palette";
-import { WorkspaceActionMenu } from "@/components/layout/workspace-action-menu";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 
 // Heavy components loaded after first paint — framer-motion, reminder logic, etc.
@@ -38,7 +36,6 @@ export default function WorkspaceLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const maddyPanelOpen = useAppStore((state) => state.maddyPanelOpen);
   const router = useRouter();
 
   // Prefetch all primary routes on mount so navigation feels instant
@@ -53,14 +50,6 @@ export default function WorkspaceLayout({
 
       {/* Main content - add bottom padding on mobile for nav bar */}
       <main className="relative flex-1 overflow-y-auto min-w-0 pb-16 md:pb-0">
-        <div
-          className={cn(
-            "pointer-events-none fixed right-4 top-3 z-40 flex items-center justify-end transition-all duration-200 md:right-5 md:top-4 xl:right-6",
-            maddyPanelOpen && "translate-y-1 opacity-0"
-          )}
-        >
-          <WorkspaceActionMenu />
-        </div>
         {children}
       </main>
 

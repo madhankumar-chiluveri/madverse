@@ -234,11 +234,11 @@ export function WorkspaceActionMenu() {
           <button
             type="button"
             aria-label="Open workspace actions"
-            className="group pointer-events-auto relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#161513]/90 text-zinc-100 shadow-[0_14px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-all hover:border-white/16 hover:bg-[#1a1917] md:h-9 md:w-9"
+            className="relative flex items-center justify-center w-8 h-8 rounded-lg hover:bg-accent/50 transition-colors text-muted-foreground"
           >
             <MoreHorizontal className="h-4 w-4" />
             {overdueCount > 0 ? (
-              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-400 px-1 text-[9px] font-semibold leading-none text-black shadow-[0_0_18px_rgba(251,191,36,0.45)]">
+              <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-400 px-0.5 text-[9px] font-semibold leading-none text-black">
                 {overdueCount > 9 ? "9+" : overdueCount}
               </span>
             ) : null}

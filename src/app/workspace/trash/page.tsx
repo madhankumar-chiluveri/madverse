@@ -17,6 +17,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { WorkspaceTopBar } from "@/components/workspace/workspace-top-bar";
 import {
   Dialog,
   DialogContent,
@@ -69,12 +70,9 @@ export default function TrashPage() {
   };
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Trash2 className="w-6 h-6 text-muted-foreground" />
-          <h1 className="text-3xl font-bold">Trash</h1>
-        </div>
+    <div className="min-h-screen">
+      <WorkspaceTopBar moduleTitle="Trash" />
+      <div className="max-w-3xl mx-auto p-4 md:p-8">
 
         {archivedPages === undefined ? (
           <div className="text-muted-foreground text-sm animate-pulse">
@@ -99,7 +97,7 @@ export default function TrashPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Filter deleted pages…"
-                className="pl-9 h-9"
+                className="pl-9 h-10 md:h-9"
               />
             </div>
 
@@ -112,7 +110,7 @@ export default function TrashPage() {
               {filtered.map((page: any) => (
                 <div
                   key={page._id}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl border hover:bg-accent/30 transition-colors group"
+                  className="flex items-center gap-3 px-3 md:px-4 py-3 rounded-xl border hover:bg-accent/30 transition-colors group"
                 >
                   {/* Icon */}
                   <span className="text-lg shrink-0">
@@ -132,12 +130,26 @@ export default function TrashPage() {
                     </p>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Actions — always visible on mobile, hover on desktop */}
+                  <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0">
+                    <button
+                      className="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors md:hidden"
+                      onClick={() => handleRestore(page._id)}
+                      title="Restore"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                    </button>
+                    <button
+                      className="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-destructive transition-colors md:hidden"
+                      onClick={() => setConfirmDelete(page._id)}
+                      title="Delete forever"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 text-xs gap-1.5"
+                      className="hidden md:flex h-7 text-xs gap-1.5"
                       onClick={() => handleRestore(page._id)}
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
@@ -146,7 +158,7 @@ export default function TrashPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 text-xs gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      className="hidden md:flex h-7 text-xs gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
                       onClick={() => setConfirmDelete(page._id)}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -196,6 +208,7 @@ export default function TrashPage() {
             </div>
           </DialogContent>
         </Dialog>
+      </div>
     </div>
   );
 }

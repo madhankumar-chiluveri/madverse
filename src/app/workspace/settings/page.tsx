@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { AccentColor, FontFamily, Theme } from "@/types/ui";
+import { WorkspaceTopBar } from "@/components/workspace/workspace-top-bar";
 
 type Section = "appearance" | "maddy" | "keyboard" | "account";
 
@@ -74,18 +75,37 @@ export default function SettingsPage() {
   const navItems: { id: Section; label: string; icon: React.ReactNode }[] = [
     { id: "appearance", label: "Appearance", icon: <Palette className="w-4 h-4" /> },
     { id: "maddy", label: "Maddy AI", icon: <AppIcon className="w-4 h-4 rounded-md" /> },
-    { id: "keyboard", label: "Keyboard shortcuts", icon: <Keyboard className="w-4 h-4" /> },
+    { id: "keyboard", label: "Shortcuts", icon: <Keyboard className="w-4 h-4" /> },
     { id: "account", label: "Account", icon: <Shield className="w-4 h-4" /> },
   ];
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">Settings</h1>
+    <div className="min-h-screen">
+      <WorkspaceTopBar moduleTitle="Settings" />
+      <div className="max-w-3xl mx-auto p-4 md:p-8">
+
+        {/* Mobile tab bar — horizontal scroll pills */}
+        <div className="flex md:hidden overflow-x-auto gap-2 mb-6 pb-1 scrollbar-hide">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setSection(item.id)}
+              className={cn(
+                "flex items-center gap-1.5 shrink-0 px-3 py-2 rounded-full text-sm font-medium border transition-colors min-h-[40px]",
+                section === item.id
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-muted/40 text-muted-foreground border-border"
+              )}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
+        </div>
 
         <div className="flex gap-8">
-          {/* Sidebar nav */}
-          <nav className="w-44 shrink-0">
+          {/* Sidebar nav — desktop only */}
+          <nav className="hidden md:block w-44 shrink-0">
             <ul className="space-y-0.5">
               {navItems.map((item) => (
                 <li key={item.id}>
@@ -107,12 +127,12 @@ export default function SettingsPage() {
           </nav>
 
           {/* Content */}
-          <div className="flex-1 space-y-8">
+          <div className="flex-1 min-w-0 space-y-8">
             {/* ── Appearance ── */}
             {section === "appearance" && (
               <>
                 <SettingSection title="Theme">
-                  <div className="flex gap-3">
+                  <div className="grid grid-cols-3 gap-2 md:flex md:gap-3">
                     {(
                       [
                         { value: "light", icon: <Sun className="w-4 h-4" />, label: "Light" },
@@ -124,7 +144,7 @@ export default function SettingsPage() {
                         key={t.value}
                         onClick={() => handleThemeChange(t.value)}
                         className={cn(
-                          "flex flex-col items-center gap-2 px-4 py-3 rounded-xl border-2 text-xs font-medium transition-all",
+                          "flex flex-col items-center gap-2 px-3 py-3 rounded-xl border-2 text-xs font-medium transition-all min-h-[72px]",
                           theme === t.value
                             ? "border-primary bg-primary/5"
                             : "border-border hover:border-primary/50"
@@ -146,7 +166,7 @@ export default function SettingsPage() {
                   title="Accent colour"
                   description="Used for highlights and interactive elements"
                 >
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2.5">
                     {ACCENT_COLORS.map((c) => (
                       <button
                         key={c.value}
@@ -155,7 +175,7 @@ export default function SettingsPage() {
                           updateSettings({ accentColor: c.value }).catch(() => {});
                         }}
                         className={cn(
-                          "w-8 h-8 rounded-full transition-all ring-2 ring-offset-2",
+                          "w-9 h-9 rounded-full transition-all ring-2 ring-offset-2",
                           accentColor === c.value
                             ? "ring-current scale-110"
                             : "ring-transparent hover:scale-105"
@@ -173,7 +193,7 @@ export default function SettingsPage() {
                   title="Font family"
                   description="Applies to page content"
                 >
-                  <div className="flex gap-3">
+                  <div className="grid grid-cols-3 gap-2 md:flex md:gap-3">
                     {(
                       [
                         { value: "default", label: "Default", preview: "Ag" },
@@ -188,7 +208,7 @@ export default function SettingsPage() {
                           updateSettings({ fontFamily: f.value }).catch(() => {});
                         }}
                         className={cn(
-                          "flex flex-col items-center gap-1 px-4 py-3 rounded-xl border-2 text-xs transition-all",
+                          "flex flex-col items-center gap-1 px-3 py-3 rounded-xl border-2 text-xs transition-all min-h-[72px]",
                           f.className,
                           fontFamily === f.value
                             ? "border-primary bg-primary/5"
@@ -228,19 +248,19 @@ export default function SettingsPage() {
                   title="Gemini API Key"
                   description="Required for AI features. Get your free key at aistudio.google.com"
                 >
-                  <div className="space-y-2 max-w-sm">
-                    <div className="flex gap-2">
+                  <div className="space-y-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <div className="relative flex-1">
                         <Input
                           type={apiKeyVisible ? "text" : "password"}
                           value={geminiInput}
                           onChange={(e) => setGeminiInput(e.target.value)}
                           placeholder="AIza..."
-                          className="pr-10"
+                          className="pr-10 h-10"
                         />
                         <button
                           type="button"
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
                           onClick={() => setApiKeyVisible(!apiKeyVisible)}
                         >
                           {apiKeyVisible ? (
@@ -253,8 +273,7 @@ export default function SettingsPage() {
                       <Button
                         onClick={handleSaveApiKey}
                         disabled={saving}
-                        size="sm"
-                        className="bg-foreground text-background hover:opacity-90"
+                        className="bg-foreground text-background hover:opacity-90 h-10 px-4"
                       >
                         <Save className="w-4 h-4 mr-1.5" />
                         Save
@@ -323,10 +342,10 @@ export default function SettingsPage() {
                   ].map((sc) => (
                     <div
                       key={sc.keys}
-                      className="flex items-center justify-between py-2 border-b last:border-b-0"
+                      className="flex items-center justify-between py-2.5 border-b last:border-b-0"
                     >
                       <span className="text-sm">{sc.desc}</span>
-                      <kbd className="text-xs bg-muted px-2 py-1 rounded font-mono border">
+                      <kbd className="text-xs bg-muted px-2 py-1 rounded font-mono border shrink-0 ml-4">
                         {sc.keys}
                       </kbd>
                     </div>

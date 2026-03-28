@@ -268,6 +268,35 @@ export const get = query({
   },
 });
 
+// Returns the ancestor chain [root → ... → direct parent] for breadcrumb rendering
+export const getAncestors = query({
+  args: { id: v.id("pages") },
+  handler: async (ctx, args) => {
+    const ancestors: Array<{
+      _id: string;
+      title: string;
+      icon: string | null | undefined;
+    }> = [];
+
+    let page = await ctx.db.get(args.id);
+    let depth = 0;
+
+    while (page?.parentId && depth < 10) {
+      const parent = await ctx.db.get(page.parentId);
+      if (!parent) break;
+      ancestors.unshift({
+        _id: parent._id,
+        title: parent.title,
+        icon: parent.icon ?? null,
+      });
+      page = parent;
+      depth++;
+    }
+
+    return ancestors;
+  },
+});
+
 export const list = query({
   args: {
     workspaceId: v.id("workspaces"),

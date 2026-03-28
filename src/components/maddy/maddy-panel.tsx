@@ -780,6 +780,3 @@ export function MaddyPanel() {
   );
 }
 
-export function MaddyInlinePanel() {
-  return null;
-}

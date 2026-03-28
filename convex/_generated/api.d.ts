@@ -11,6 +11,7 @@
 import type * as aiChat from "../aiChat.js";
 import type * as auth from "../auth.js";
 import type * as blocks from "../blocks.js";
+import type * as comments from "../comments.js";
 import type * as crons from "../crons.js";
 import type * as databases from "../databases.js";
 import type * as feed from "../feed.js";
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   aiChat: typeof aiChat;
   auth: typeof auth;
   blocks: typeof blocks;
+  comments: typeof comments;
   crons: typeof crons;
   databases: typeof databases;
   feed: typeof feed;

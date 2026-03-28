@@ -105,14 +105,18 @@ export const logHabit = mutation({
       });
     }
 
-    // Update streak
-    if (args.completed) {
-      const habit = await ctx.db.get(args.habitId);
-      if (habit) {
+    // Update streak: increment on complete, decrement on un-complete (floor 0)
+    const habit = await ctx.db.get(args.habitId);
+    if (habit) {
+      if (args.completed) {
         const newStreak = habit.streak + 1;
         await ctx.db.patch(args.habitId, {
           streak: newStreak,
           longestStreak: Math.max(habit.longestStreak, newStreak),
+        });
+      } else {
+        await ctx.db.patch(args.habitId, {
+          streak: Math.max(0, habit.streak - 1),
         });
       }
     }

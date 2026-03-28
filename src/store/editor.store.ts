@@ -17,6 +17,10 @@ interface EditorState {
   isSaving: boolean;
   setSaving: (v: boolean) => void;
 
+  // Save status for top bar display
+  saveStatus: "idle" | "saving" | "saved" | "error";
+  setSaveStatus: (s: "idle" | "saving" | "saved" | "error") => void;
+
   // Selected block IDs (for multi-select)
   selectedBlockIds: string[];
   setSelectedBlockIds: (ids: string[]) => void;
@@ -32,6 +36,9 @@ export const useEditorStore = create<EditorState>()((set) => ({
 
   isSaving: false,
   setSaving: (v) => set({ isSaving: v }),
+
+  saveStatus: "idle",
+  setSaveStatus: (s) => set({ saveStatus: s }),
 
   selectedBlockIds: [],
   setSelectedBlockIds: (ids) => set({ selectedBlockIds: ids }),
