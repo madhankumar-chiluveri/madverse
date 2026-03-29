@@ -4,7 +4,24 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { action, internalMutation, internalQuery, query } from "./_generated/server";
 
-async function resolveCurrentAuthStatus(ctx: any, userId: any) {
+type CurrentAuthStatus = {
+  email: string | null;
+  name: string | null;
+  hasGoogle: boolean;
+  hasPassword: boolean;
+  hasLegacyPasswordAccount: boolean;
+  preferredProvider: "google" | "password";
+};
+
+type PasswordToGoogleConversionResult = {
+  mergedExistingData: boolean;
+  removedPassword: true;
+};
+
+async function resolveCurrentAuthStatus(
+  ctx: any,
+  userId: any
+): Promise<CurrentAuthStatus | null> {
   const user = await ctx.db.get(userId);
   if (!user) return null;
 
@@ -110,7 +127,7 @@ export const finalizePasswordToGoogleConversion = internalMutation({
     passwordUserId: v.id("users"),
     passwordAccountId: v.id("authAccounts"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<PasswordToGoogleConversionResult> => {
     const googleUser = await ctx.db.get(args.currentGoogleUserId);
     const passwordUser = await ctx.db.get(args.passwordUserId);
     const passwordAccount = await ctx.db.get(args.passwordAccountId);
@@ -205,7 +222,7 @@ export const convertPasswordAccountToGoogle = action({
   args: {
     password: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<PasswordToGoogleConversionResult> => {
     const userId = await getAuthUserId(ctx);
     const sessionId = await getAuthSessionId(ctx);
 
@@ -213,7 +230,7 @@ export const convertPasswordAccountToGoogle = action({
       throw new Error("You need to be signed in first.");
     }
 
-    const authStatus = await ctx.runQuery(
+    const authStatus: CurrentAuthStatus | null = await ctx.runQuery(
       (internal as any).accountConversion.getCurrentAuthStatusInternal,
       {}
     );

@@ -108,6 +108,10 @@ const PANE_DETAILS = {
   },
 } as const;
 
+const SNAPPY_EASE_STYLE = {
+  transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+} as const;
+
 function getRouteModule(pathname: string) {
   const segment = pathname.split("/")[2] ?? "";
 
@@ -149,8 +153,9 @@ const ModuleRailItem = memo(function ModuleRailItem({
         onClick={onClick}
         onMouseEnter={onPrefetch}
         onFocus={onPrefetch}
+        style={SNAPPY_EASE_STYLE}
         className={cn(
-          "relative flex h-11 items-center overflow-hidden rounded-2xl border transition-[width,padding,gap,background-color,border-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          "relative flex h-11 items-center overflow-hidden rounded-2xl border transition-[width,padding,gap,background-color,border-color] duration-300",
           showLabel ? "w-full justify-start gap-3 px-3" : "w-11 justify-center",
           isActive
             ? "border-primary/30 bg-primary/12 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
@@ -168,8 +173,9 @@ const ModuleRailItem = memo(function ModuleRailItem({
           strokeWidth={isActive ? 2.4 : 2}
         />
         <span
+          style={SNAPPY_EASE_STYLE}
           className={cn(
-            "min-w-0 overflow-hidden whitespace-nowrap text-sm font-medium transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+            "min-w-0 overflow-hidden whitespace-nowrap text-sm font-medium transition-all duration-200",
             showLabel
               ? "max-w-[120px] translate-x-0 opacity-100"
               : "max-w-0 -translate-x-1 opacity-0"
@@ -313,8 +319,9 @@ function ModuleRail() {
 
   return (
     <div
+      style={SNAPPY_EASE_STYLE}
       className={cn(
-        "flex h-full shrink-0 flex-col border-r border-border/80 bg-sidebar/95 transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        "flex h-full shrink-0 flex-col border-r border-border/80 bg-sidebar/95 transition-[width] duration-300",
         showExpandedRail ? "w-[208px]" : "w-[72px]"
       )}
       onMouseEnter={openRailPeek}
@@ -337,15 +344,17 @@ function ModuleRail() {
               setActiveModule("overview");
               setContextPaneCollapsed(false);
             }}
+            style={SNAPPY_EASE_STYLE}
             className={cn(
-              "flex h-11 items-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition-[width,padding,gap,background-color,border-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-white/16 hover:bg-white/[0.05]",
+              "flex h-11 items-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition-[width,padding,gap,background-color,border-color] duration-300 hover:border-white/16 hover:bg-white/[0.05]",
               showExpandedRail ? "w-[184px] justify-start gap-3 px-3" : "w-11 justify-center"
             )}
           >
             <AppIcon className="h-6 w-6 rounded-xl" />
             <span
+              style={SNAPPY_EASE_STYLE}
               className={cn(
-                "min-w-0 overflow-hidden whitespace-nowrap text-sm font-semibold text-foreground transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                "min-w-0 overflow-hidden whitespace-nowrap text-sm font-semibold text-foreground transition-all duration-200",
                 showExpandedRailLabels
                   ? "max-w-[96px] translate-x-0 opacity-100"
                   : "max-w-0 -translate-x-1 opacity-0"
@@ -392,15 +401,17 @@ function ModuleRail() {
               aria-label="Open context pane"
               title="Open context pane"
               onClick={() => setContextPaneCollapsed(false)}
+              style={SNAPPY_EASE_STYLE}
               className={cn(
-                "flex h-11 items-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] text-muted-foreground transition-[width,padding,gap,background-color,border-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-white/16 hover:bg-white/[0.05] hover:text-foreground",
+                "flex h-11 items-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] text-muted-foreground transition-[width,padding,gap,background-color,border-color] duration-300 hover:border-white/16 hover:bg-white/[0.05] hover:text-foreground",
                 showExpandedRail ? "w-full justify-start gap-3 px-3" : "w-11 justify-center"
               )}
             >
               <PanelLeft className="h-[18px] w-[18px]" />
               <span
+                style={SNAPPY_EASE_STYLE}
                 className={cn(
-                  "min-w-0 overflow-hidden whitespace-nowrap text-sm font-medium transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                  "min-w-0 overflow-hidden whitespace-nowrap text-sm font-medium transition-all duration-200",
                   showExpandedRailLabels
                     ? "max-w-[80px] translate-x-0 opacity-100"
                     : "max-w-0 -translate-x-1 opacity-0"
