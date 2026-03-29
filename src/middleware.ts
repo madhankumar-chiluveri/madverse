@@ -32,6 +32,8 @@ export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
   if (isWorkspaceRoute(request) && !isAuthenticated) {
     return nextjsMiddlewareRedirect(request, "/login");
   }
+}, {
+  shouldHandleCode: (request) => !request.nextUrl.pathname.startsWith("/api/auth/"),
 });
 
 export const config = {

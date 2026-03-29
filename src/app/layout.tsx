@@ -13,18 +13,21 @@ const inter = Inter({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-inter",
+  preload: false,
 });
 
 const robotoSerif = Roboto_Serif({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-roboto-serif",
+  preload: false,
 });
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-jetbrains-mono",
+  preload: false,
 });
 
 export const metadata: Metadata = {

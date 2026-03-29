@@ -1,18 +1,44 @@
-const CACHE_NAME = "madvibe-v4";
+const CACHE_NAME = "madvibe-v5";
 const STATIC_ASSETS = [
-  "/",
   "/manifest.json",
-  "/icons/icon-192x192.svg",
-  "/icons/icon-512x512.svg",
+  "/app-icon.svg",
+  "/apple-touch-icon.png",
+  "/icons/icon-192x192.png",
+  "/icons/icon-512x512.png",
+  "/icons/icon-maskable-192x192.png",
+  "/icons/icon-maskable-512x512.png",
 ];
+
+function shouldCacheAsset(url) {
+  return (
+    url.origin === self.location.origin &&
+    (
+      url.pathname === "/manifest.json" ||
+      url.pathname === "/app-icon.svg" ||
+      url.pathname === "/apple-touch-icon.png" ||
+      url.pathname.startsWith("/icons/")
+    )
+  );
+}
 
 // Install event - cache static assets
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await Promise.allSettled(
+        STATIC_ASSETS.map(async (asset) => {
+          const response = await fetch(asset, { cache: "no-cache" });
+
+          if (!response.ok) {
+            throw new Error(`Failed to precache ${asset}: ${response.status}`);
+          }
+
+          await cache.put(asset, response);
+        })
+      );
+
+      await self.skipWaiting();
+    })
   );
 });
 
@@ -35,39 +61,49 @@ self.addEventListener("activate", (event) => {
 // Fetch event - network first, fall back to cache
 self.addEventListener("fetch", (event) => {
   const { request } = event;
+  const url = new URL(request.url);
 
   // Skip non-GET requests
   if (request.method !== "GET") return;
-
-  // Skip Convex API calls
-  if (request.url.includes("convex.cloud")) return;
-  if (request.url.includes("/api/")) return;
-  // Avoid caching Next.js runtime/dev chunks, which change frequently
-  if (request.url.includes("/_next/")) return;
+  if (!shouldCacheAsset(url)) return;
 
   event.respondWith(
+    caches.match(request).then((cached) => {
+      const networkFetch = fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const cloned = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(request, cloned);
+            });
+          }
+
+          return response;
+        })
+        .catch(() => cached ?? new Response("Offline", { status: 503 }));
+
+      return cached ?? networkFetch;
+    })
+  );
+});
+
+// Warm cached assets in the background if we served from cache
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  if (request.method !== "GET" || !shouldCacheAsset(url)) return;
+
+  event.waitUntil(
     fetch(request)
       .then((response) => {
-        // Cache successful responses
-        if (response.ok) {
-          const cloned = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, cloned);
-          });
-        }
-        return response;
-      })
-      .catch(() => {
-        // Fall back to cache when offline
-        return caches.match(request).then((cached) => {
-          if (cached) return cached;
-          // Return offline page for navigation requests
-          if (request.mode === "navigate") {
-            return caches.match("/");
-          }
-          return new Response("Offline", { status: 503 });
+        if (!response.ok) return;
+
+        return caches.open(CACHE_NAME).then((cache) => {
+          cache.put(request, response);
         });
       })
+      .catch(() => {})
   );
 });
 
