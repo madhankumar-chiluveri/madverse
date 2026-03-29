@@ -30,6 +30,14 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
+function getSafeRedirectTarget(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return DEFAULT_WORKSPACE_ROUTE;
+  }
+
+  return value;
+}
+
 function GoogleMark() {
   return (
     <svg
@@ -64,6 +72,7 @@ export default function LoginPage() {
   const autoStartedGoogleRef = useRef(false);
   const [hintEmail, setHintEmail] = useState("");
   const [hintProvider, setHintProvider] = useState("");
+  const [redirectTo, setRedirectTo] = useState<string>(DEFAULT_WORKSPACE_ROUTE);
 
   const [step, setStep] = useState<"signIn" | "signUp">("signIn");
   const [email, setEmail] = useState("");
@@ -84,9 +93,11 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search);
     const nextHintEmail = params.get("hint") ?? "";
     const nextHintProvider = params.get("provider") ?? "";
+    const nextRedirectTo = getSafeRedirectTarget(params.get("redirectTo"));
 
     setHintEmail(nextHintEmail);
     setHintProvider(nextHintProvider);
+    setRedirectTo(nextRedirectTo);
   }, []);
 
   useEffect(() => {
@@ -112,7 +123,7 @@ export default function LoginPage() {
     setGoogleLoading(true);
 
     try {
-      await signIn("google", { redirectTo: DEFAULT_WORKSPACE_ROUTE });
+      await signIn("google", { redirectTo });
     } catch (err: any) {
       const message = err?.message ?? "";
 
@@ -140,7 +151,7 @@ export default function LoginPage() {
       }
 
       setRedirecting(true);
-      router.replace(DEFAULT_WORKSPACE_ROUTE);
+      router.replace(redirectTo);
     } catch (err: any) {
       const message = err?.message ?? "";
 

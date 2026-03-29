@@ -1,4 +1,4 @@
-const CACHE_NAME = "madvibe-v3";
+const CACHE_NAME = "madvibe-v4";
 const STATIC_ASSETS = [
   "/",
   "/manifest.json",
@@ -41,6 +41,7 @@ self.addEventListener("fetch", (event) => {
 
   // Skip Convex API calls
   if (request.url.includes("convex.cloud")) return;
+  if (request.url.includes("/api/")) return;
   // Avoid caching Next.js runtime/dev chunks, which change frequently
   if (request.url.includes("/_next/")) return;
 
