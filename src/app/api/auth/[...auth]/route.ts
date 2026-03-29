@@ -1,4 +1,6 @@
+import { fetchAction } from "convex/nextjs";
 import { NextRequest, NextResponse } from "next/server";
+import { api } from "../../../../../convex/_generated/api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +45,26 @@ function isSupportedAuthRoute(authSegments: string[]) {
   );
 }
 
+function getCookiePrefix(request: NextRequest) {
+  const hostname = request.nextUrl.hostname;
+  return hostname === "localhost" || hostname === "127.0.0.1" ? "" : "__Host-";
+}
+
+function getAuthTokenFromRequest(request: NextRequest) {
+  const tokenName = `${getCookiePrefix(request)}__convexAuthJWT`;
+  return request.cookies.get(tokenName)?.value;
+}
+
+function getSafeRedirectTarget(request: NextRequest) {
+  const redirectTo = request.nextUrl.searchParams.get("redirectTo");
+
+  if (!redirectTo || !redirectTo.startsWith("/") || redirectTo.startsWith("//")) {
+    return undefined;
+  }
+
+  return redirectTo;
+}
+
 async function proxyAuthRequest(
   request: NextRequest,
   authSegments: string[]
@@ -55,21 +77,49 @@ async function proxyAuthRequest(
     authSegments[0] === "signin" &&
     !request.nextUrl.searchParams.get("code")
   ) {
-    const retryUrl = new URL("/login", request.url);
-    const redirectTo = request.nextUrl.searchParams.get("redirectTo");
     const provider = authSegments[1];
+    const redirectTo = getSafeRedirectTarget(request);
+    const token = getAuthTokenFromRequest(request);
 
-    retryUrl.searchParams.set("provider", provider);
+    try {
+      const result = await fetchAction(
+        api.auth.signIn,
+        {
+          provider,
+          params: redirectTo ? { redirectTo } : {},
+          calledBy: "nextjs-api-auth-route",
+        },
+        token ? { token } : {}
+      );
 
-    if (
-      redirectTo &&
-      redirectTo.startsWith("/") &&
-      !redirectTo.startsWith("//")
-    ) {
-      retryUrl.searchParams.set("redirectTo", redirectTo);
+      if (!result.redirect || !result.verifier) {
+        throw new Error("OAuth sign-in did not return a redirect and verifier.");
+      }
+
+      const redirectResponse = NextResponse.redirect(result.redirect);
+      redirectResponse.cookies.set(
+        `${getCookiePrefix(request)}__convexAuthOAuthVerifier`,
+        result.verifier,
+        {
+          httpOnly: true,
+          sameSite: "lax",
+          secure: getCookiePrefix(request) === "__Host-",
+          path: "/",
+        }
+      );
+
+      return redirectResponse;
+    } catch (error) {
+      console.error("Auth proxy sign-in bootstrap failed", error);
+
+      return NextResponse.json(
+        {
+          error:
+            "Could not bootstrap Google sign-in. Check that NEXT_PUBLIC_CONVEX_URL points at the active production deployment.",
+        },
+        { status: 500 }
+      );
     }
-
-    return NextResponse.redirect(retryUrl);
   }
 
   try {
