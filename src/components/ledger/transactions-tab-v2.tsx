@@ -373,8 +373,8 @@ function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border bg-card shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 pb-[calc(env(safe-area-inset-bottom)+6.25rem)] pt-6 backdrop-blur-sm sm:items-center sm:pb-4">
+      <div className="max-h-[min(88vh,calc(100dvh-8rem-env(safe-area-inset-bottom)))] w-full max-w-2xl overflow-y-auto rounded-3xl border bg-card shadow-2xl sm:max-h-[90vh]">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-card px-5 py-4">
           <h2 className="text-sm font-semibold">{title}</h2>
           <button
@@ -385,7 +385,7 @@ function Modal({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="space-y-4 px-5 py-5">{children}</div>
+        <div className="space-y-4 px-5 py-5 pb-6">{children}</div>
       </div>
     </div>
   );
@@ -986,25 +986,12 @@ export function TransactionsTabV2() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-3xl border bg-card/70 p-5 shadow-sm lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-2xl">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Accounts and transactions
-          </p>
-          <h2 className="mt-2 text-xl font-semibold tracking-tight">
-            Manage every account where money moves.
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Keep savings and current accounts organized, then log activity from the
-            same workspace instead of jumping across finance tabs.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+        <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:justify-end">
           <button
             type="button"
             onClick={() => openNewAccount()}
-            className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border px-3.5 text-sm font-medium transition-colors hover:bg-muted"
+            className="inline-flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl border px-3.5 text-sm font-medium transition-colors hover:bg-muted sm:w-auto"
           >
             <Landmark className="h-4 w-4" />
             Add account
@@ -1012,7 +999,7 @@ export function TransactionsTabV2() {
           <button
             type="button"
             onClick={() => openNewTransaction()}
-            className="inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="inline-flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-3.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             Add transaction

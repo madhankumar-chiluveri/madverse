@@ -12,6 +12,7 @@ interface WorkspaceTopBarProps {
   breadcrumbContent?: React.ReactNode;
   rightContent?: React.ReactNode;
   className?: string;
+  sticky?: boolean;
 }
 
 export function WorkspaceTopBar({
@@ -19,6 +20,7 @@ export function WorkspaceTopBar({
   breadcrumbContent,
   rightContent,
   className,
+  sticky = true,
 }: WorkspaceTopBarProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { currentWorkspace } = useResolvedWorkspace();
@@ -26,7 +28,8 @@ export function WorkspaceTopBar({
   return (
     <div
       className={cn(
-        "sticky top-0 z-40 flex items-center justify-between gap-2 px-4 py-2 md:px-8",
+        sticky ? "sticky top-0 z-40" : "relative z-10",
+        "flex items-center justify-between gap-2 px-4 py-2 md:px-8",
         "border-b border-border/40 bg-background/80 backdrop-blur-md",
         className
       )}

@@ -12,23 +12,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AppIcon } from "@/components/ui/app-icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { type SavedAccount, getAccounts } from "@/lib/account-manager";
 import { DEFAULT_WORKSPACE_ROUTE } from "@/lib/routes";
-import { cn } from "@/lib/utils";
-
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
 
 function getSafeRedirectTarget(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
@@ -101,7 +89,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
-  const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
 
   useEffect(() => {
     router.prefetch(DEFAULT_WORKSPACE_ROUTE);
@@ -118,10 +105,6 @@ export default function LoginPage() {
     setHintEmail(nextHintEmail);
     setHintProvider(nextHintProvider);
     setRedirectTo(nextRedirectTo);
-  }, []);
-
-  useEffect(() => {
-    setSavedAccounts(getAccounts());
   }, []);
 
   useEffect(() => {
@@ -178,21 +161,7 @@ export default function LoginPage() {
       }
 
       setLoading(false);
-    }
-  }
-
-  function handleSavedAccountSelect(account: SavedAccount) {
-    setStep("signIn");
-    setEmail(account.email);
-
-    if (account.provider === "google") {
-      handleGoogleSignIn({ loginHint: account.email });
-      return;
-    }
-
-    toast.message("Password account selected", {
-      description: "Enter your password to continue.",
-    });
+      }
   }
 
   return (
@@ -250,55 +219,6 @@ export default function LoginPage() {
                 : "Start building your second brain"}
             </p>
 
-            {savedAccounts.length > 0 ? (
-              <div className="mb-6 space-y-2">
-                <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                  Recent accounts
-                </div>
-                <div className="text-xs leading-5 text-muted-foreground">
-                  Saved Google accounts try the matching account first. The main Google button opens the chooser.
-                </div>
-                <div className="space-y-2">
-                  {savedAccounts.map((account) => {
-                    const isHinted = hintEmail === account.email;
-                    const initials = getInitials(account.name || account.email);
-
-                    return (
-                      <button
-                        key={account.userId}
-                        type="button"
-                        onClick={() => handleSavedAccountSelect(account)}
-                        className={cn(
-                          "flex min-h-12 w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors touch-manipulation",
-                          isHinted
-                            ? "border-primary/40 bg-accent/70"
-                            : "border-border/70 bg-background hover:bg-accent/60"
-                        )}
-                      >
-                        <Avatar className="h-9 w-9 shrink-0">
-                          <AvatarImage src={account.image} />
-                          <AvatarFallback className="bg-foreground text-xs text-background">
-                            {initials}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium leading-5 break-words">
-                            {account.name}
-                          </div>
-                          <div className="text-xs leading-4 text-muted-foreground break-all">
-                            {account.email}
-                          </div>
-                        </div>
-                        <div className="shrink-0 rounded-full border border-border/70 px-2 py-1 text-[11px] font-medium text-muted-foreground">
-                          {account.provider === "google" ? "Fast Google" : "Password"}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-
             <Button
               type="button"
               variant="outline"
@@ -312,7 +232,7 @@ export default function LoginPage() {
               ) : (
                 <GoogleMark />
               )}
-              Choose Google account
+              Continue with Google
             </Button>
 
             <div className="relative mb-6">

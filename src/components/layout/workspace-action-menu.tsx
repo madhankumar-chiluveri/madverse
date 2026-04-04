@@ -128,7 +128,8 @@ export function WorkspaceActionMenu() {
   const setReminderCenterOpen = useAppStore((state) => state.setReminderCenterOpen);
   const { currentWorkspace, resolvedWorkspaceId } = useResolvedWorkspace();
 
-  const [open, setOpen] = useState(false);
+  const [desktopOpen, setDesktopOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [createItemOpen, setCreateItemOpen] = useState(false);
   const [createSpaceOpen, setCreateSpaceOpen] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState("");
@@ -147,38 +148,41 @@ export function WorkspaceActionMenu() {
   const actionsDisabled = !resolvedWorkspaceId;
   const workspaceLabel = currentWorkspace?.name ?? "Workspace";
 
-  const closeMenu = () => setOpen(false);
+  const closeMenus = () => {
+    setDesktopOpen(false);
+    setMobileOpen(false);
+  };
 
   const handleOpenReminders = () => {
-    closeMenu();
+    closeMenus();
     setReminderCenterOpen(true);
   };
 
   const handleOpenCreateItem = () => {
     if (!resolvedWorkspaceId) return;
-    closeMenu();
+    closeMenus();
     setCreateItemOpen(true);
   };
 
   const handleOpenCreateSpace = () => {
     if (!resolvedWorkspaceId) return;
-    closeMenu();
+    closeMenus();
     setCreateSpaceOpen(true);
   };
 
   const handleOpenImport = () => {
     if (!resolvedWorkspaceId) return;
-    closeMenu();
+    closeMenus();
     setImportModalOpen(true);
   };
 
   const handleOpenWorkspaces = () => {
-    closeMenu();
+    closeMenus();
     setWorkspaceSwitcherOpen(true);
   };
 
   const handleOpenTrash = () => {
-    closeMenu();
+    closeMenus();
     if (pathname !== "/workspace/trash") {
       router.push("/workspace/trash");
     }
@@ -212,14 +216,117 @@ export function WorkspaceActionMenu() {
     }
   };
 
+  const actionMenuContent = (
+    <>
+      <div className="rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.025))] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
+              Workspace
+            </div>
+            <div className="mt-1 truncate text-sm font-semibold tracking-[-0.01em] text-white">
+              {workspaceLabel}
+            </div>
+          </div>
+          {overdueCount > 0 ? (
+            <span className="shrink-0 rounded-full border border-amber-400/18 bg-amber-400/[0.1] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200">
+              {overdueCount} overdue
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-2 text-[11px] leading-4 text-zinc-500">
+          Quick access to the actions you actually use.
+        </p>
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <ActionTile
+          icon={Building2}
+          label="Workspaces"
+          meta="Switch or create"
+          onClick={handleOpenWorkspaces}
+          tone="neutral"
+        />
+        <ActionTile
+          icon={BellRing}
+          label="Reminders"
+          meta={
+            overdueCount > 0
+              ? `${overdueCount} overdue waiting`
+              : "Upcoming and overdue"
+          }
+          badge={overdueCount > 0 ? `${overdueCount}` : null}
+          onClick={handleOpenReminders}
+          tone="amber"
+        />
+        <ActionTile
+          icon={Plus}
+          label="New"
+          meta="Page or database"
+          onClick={handleOpenCreateItem}
+          disabled={actionsDisabled}
+          tone="blue"
+        />
+        <ActionTile
+          icon={FolderPlus}
+          label="Space"
+          meta="Dedicated project home"
+          onClick={handleOpenCreateSpace}
+          disabled={actionsDisabled}
+          tone="emerald"
+        />
+        <ActionTile
+          icon={FileUp}
+          label="Import"
+          meta="Markdown or CSV"
+          onClick={handleOpenImport}
+          disabled={actionsDisabled}
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={handleOpenTrash}
+        className={cn(
+          "mt-2 flex w-full items-center gap-3 rounded-[16px] border px-3 py-2.5 text-left transition-colors",
+          pathname === "/workspace/trash"
+            ? "border-red-400/16 bg-red-400/[0.08] text-red-100"
+            : "border-white/8 bg-white/[0.03] text-zinc-200 hover:border-red-400/16 hover:bg-red-400/[0.08] hover:text-red-100"
+        )}
+      >
+        <span
+          className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-[11px] border",
+            pathname === "/workspace/trash"
+              ? "border-red-400/16 bg-red-400/[0.08]"
+              : "border-white/8 bg-black/20"
+          )}
+        >
+          <Trash2 className="h-4 w-4" />
+        </span>
+
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold tracking-[-0.01em]">
+            {pathname === "/workspace/trash" ? "Trash open" : "Trash"}
+          </span>
+          <span className="mt-0.5 block text-[11px] text-zinc-500">
+            Deleted pages and spaces
+          </span>
+        </span>
+
+        <ChevronRight className="h-4 w-4 text-zinc-500" />
+      </button>
+    </>
+  );
+
   return (
     <>
-      <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenu open={desktopOpen} onOpenChange={setDesktopOpen}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
             aria-label="Open workspace actions"
-            className="relative flex items-center justify-center w-8 h-8 rounded-lg hover:bg-accent/50 transition-colors text-muted-foreground"
+            className="relative hidden h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent/50 md:flex"
           >
             <MoreHorizontal className="h-4 w-4" />
             {overdueCount > 0 ? (
@@ -235,111 +342,38 @@ export function WorkspaceActionMenu() {
           sideOffset={12}
           className="w-[332px] max-w-[calc(100vw-1rem)] rounded-[22px] border-white/10 bg-[#141311]/96 p-2 text-zinc-100 shadow-[0_28px_80px_rgba(0,0,0,0.48)] backdrop-blur-2xl"
         >
-          <div className="rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.025))] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
-                  Workspace
-                </div>
-                <div className="mt-1 truncate text-sm font-semibold tracking-[-0.01em] text-white">
-                  {workspaceLabel}
-                </div>
-              </div>
-              {overdueCount > 0 ? (
-                <span className="shrink-0 rounded-full border border-amber-400/18 bg-amber-400/[0.1] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200">
-                  {overdueCount} overdue
-                </span>
-              ) : null}
-            </div>
-            <p className="mt-2 text-[11px] leading-4 text-zinc-500">
-              Quick access to the actions you actually use.
-            </p>
-          </div>
-
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <ActionTile
-              icon={Building2}
-              label="Workspaces"
-              meta="Switch or create"
-              onClick={handleOpenWorkspaces}
-              tone="neutral"
-            />
-            <ActionTile
-              icon={BellRing}
-              label="Reminders"
-              meta={
-                overdueCount > 0
-                  ? `${overdueCount} overdue waiting`
-                  : "Upcoming and overdue"
-              }
-              badge={overdueCount > 0 ? `${overdueCount}` : null}
-              onClick={handleOpenReminders}
-              tone="amber"
-            />
-            <ActionTile
-              icon={Plus}
-              label="New"
-              meta="Page or database"
-              onClick={handleOpenCreateItem}
-              disabled={actionsDisabled}
-              tone="blue"
-            />
-            <ActionTile
-              icon={FolderPlus}
-              label="Space"
-              meta="Dedicated project home"
-              onClick={handleOpenCreateSpace}
-              disabled={actionsDisabled}
-              tone="emerald"
-            />
-            <ActionTile
-              icon={FileUp}
-              label="Import"
-              meta="Markdown or CSV"
-              onClick={handleOpenImport}
-              disabled={actionsDisabled}
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={handleOpenTrash}
-            className={cn(
-              "mt-2 flex w-full items-center gap-3 rounded-[16px] border px-3 py-2.5 text-left transition-colors",
-              pathname === "/workspace/trash"
-                ? "border-red-400/16 bg-red-400/[0.08] text-red-100"
-                : "border-white/8 bg-white/[0.03] text-zinc-200 hover:border-red-400/16 hover:bg-red-400/[0.08] hover:text-red-100"
-            )}
-          >
-            <span
-              className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-[11px] border",
-                pathname === "/workspace/trash"
-                  ? "border-red-400/16 bg-red-400/[0.08]"
-                  : "border-white/8 bg-black/20"
-              )}
-            >
-              <Trash2 className="h-4 w-4" />
-            </span>
-
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold tracking-[-0.01em]">
-                {pathname === "/workspace/trash" ? "Trash open" : "Trash"}
-              </span>
-              <span className="mt-0.5 block text-[11px] text-zinc-500">
-                Deleted pages and spaces
-              </span>
-            </span>
-
-            <ChevronRight className="h-4 w-4 text-zinc-500" />
-          </button>
+          {actionMenuContent}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <button
+        type="button"
+        aria-label="Open workspace actions"
+        onClick={() => setMobileOpen(true)}
+        className="relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent/50 md:hidden"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+        {overdueCount > 0 ? (
+          <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-400 px-0.5 text-[9px] font-semibold leading-none text-black">
+            {overdueCount > 9 ? "9+" : overdueCount}
+          </span>
+        ) : null}
+      </button>
+
+      <Dialog open={mobileOpen} onOpenChange={setMobileOpen}>
+        <DialogContent
+          title="Workspace actions"
+          hideTitleVisually={true}
+          className="max-h-[min(88vh,calc(100dvh-1.5rem))] w-[min(360px,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] overflow-hidden border-white/10 bg-[#141311]/98 p-2 pt-12 text-zinc-100"
+        >
+          {actionMenuContent}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={createSpaceOpen} onOpenChange={setCreateSpaceOpen}>
         <DialogContent
           title="Create space"
-          className="max-w-md border-white/10 bg-[#161513] text-zinc-100"
+          className="max-h-[min(88vh,calc(100dvh-1.5rem))] w-[min(28rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] border-white/10 bg-[#161513] text-zinc-100"
         >
           <DialogHeader>
             <DialogTitle>Create a new project space</DialogTitle>
@@ -383,10 +417,10 @@ export function WorkspaceActionMenu() {
         <DialogContent
           title="Workspaces"
           hideTitleVisually={true}
-          className="max-h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] overflow-hidden border-white/10 bg-[#161513] p-0 text-zinc-100 sm:max-w-[360px]"
+          className="max-h-[min(88vh,calc(100dvh-1.5rem))] w-[min(360px,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] overflow-hidden border-white/10 bg-[#161513] p-0 text-zinc-100"
         >
           <WorkspaceSwitcherContent
-            className="rounded-[24px]"
+            className="rounded-[24px] pt-12 md:pt-0"
             onClose={() => setWorkspaceSwitcherOpen(false)}
             onRequestCreateWorkspace={() => {
               setWorkspaceSwitcherOpen(false);

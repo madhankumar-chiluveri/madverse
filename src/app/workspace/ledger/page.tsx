@@ -220,15 +220,15 @@ function Modal({ open, onClose, title, children }: {
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-card border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 pb-[calc(env(safe-area-inset-bottom)+6.25rem)] pt-6 backdrop-blur-sm sm:items-center sm:pb-4">
+      <div className="bg-card border rounded-2xl w-full max-w-lg max-h-[min(88vh,calc(100dvh-8rem-env(safe-area-inset-bottom)))] overflow-y-auto shadow-2xl sm:max-h-[90vh]">
         <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-card z-10">
           <h2 className="text-sm font-semibold">{title}</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="px-5 py-4 space-y-4">{children}</div>
+        <div className="px-5 py-4 pb-5 space-y-4">{children}</div>
       </div>
     </div>
   );
@@ -327,12 +327,17 @@ function SaveBtn({ loading, label = "Save" }: { loading?: boolean; label?: strin
   return (
     <button type="submit" disabled={loading}
       className="w-full bg-primary text-primary-foreground text-sm font-medium py-2.5 rounded-xl hover:bg-primary/90 disabled:opacity-50 transition-colors min-h-[44px]">
-      {loading ? "Saving…" : label}
+      {loading ? "Saving..." : label}
     </button>
   );
 }
 
 // ── DASHBOARD TAB ─────────────────────────────────────────────────────────────
+
+function confirmDeleteRecord(recordLabel: string, detail?: string) {
+  const suffix = detail ? `\n\n${detail}` : "";
+  return window.confirm(`Delete this ${recordLabel}? This action cannot be undone.${suffix}`);
+}
 
 function DashboardTab() {
   const month = currentMonth();
@@ -668,7 +673,11 @@ function TransactionsTab() {
                   {t.type === "income" ? "+" : t.type === "transfer" ? (t.transferDirection === "in" ? "+" : "−") : "−"}{fmt(t.amount)}
                 </td>
                 <td className="px-2 py-3">
-                  <button onClick={() => deleteTx({ id: t._id })}
+                  <button
+                    onClick={() => {
+                      if (!confirmDeleteRecord("transaction")) return;
+                      void deleteTx({ id: t._id });
+                    }}
                     className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/15 text-red-500 transition-all">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -904,7 +913,12 @@ function CreditCardsTab() {
                       <p className="font-semibold">{card.cardName ?? "Credit Card"}</p>
                     </div>
                     <div className="flex gap-1">
-                      <button onClick={(ev) => { ev.stopPropagation(); deleteCard({ id: card._id }); }}
+                      <button
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          if (!confirmDeleteRecord("credit card")) return;
+                          void deleteCard({ id: card._id });
+                        }}
                         className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -1066,6 +1080,13 @@ function LoansTab() {
 
   const lent = (loans ?? []).filter((l: any) => l.direction === "lent");
   const borrowed = (loans ?? []).filter((l: any) => l.direction === "borrowed");
+  const accountsById = useMemo(
+    () =>
+      Object.fromEntries(
+        (accounts ?? []).map((account: any) => [String(account._id), account])
+      ) as Record<string, any>,
+    [accounts]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1108,6 +1129,16 @@ function LoansTab() {
     }
   };
 
+  const openRepaymentModal = (loan: any) => {
+    setRepayLoan(loan);
+    setRepayForm({
+      amount: "",
+      date: todayDate(),
+      accountId: loan.linkedAccountId ? String(loan.linkedAccountId) : "",
+      notes: "",
+    });
+  };
+
   const STATUS_COLORS: Record<string, string> = {
     active: "bg-blue-500/15 text-blue-600",
     partially_paid: "bg-amber-500/15 text-amber-600",
@@ -1116,58 +1147,160 @@ function LoansTab() {
     written_off: "bg-muted text-muted-foreground",
   };
 
-  const LoanCard = ({ loan }: { loan: any }) => (
-    <div className="bg-card border rounded-xl p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-semibold">{loan.counterpartyName}</p>
-            <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium capitalize", STATUS_COLORS[loan.status] ?? STATUS_COLORS.active)}>
-              {loan.status.replace("_", " ")}
-            </span>
-            {loan.daysOverdue > 0 && (
-              <span className="text-xs text-red-500">Overdue {loan.daysOverdue}d</span>
+  const LoanCard = ({ loan }: { loan: any }) => {
+    const repaymentDirectionLabel =
+      loan.direction === "lent" ? "Received in" : "Paid from";
+    const repaymentAmountClassName =
+      loan.direction === "lent" ? "text-emerald-600" : "text-red-500";
+    const linkedAccount = loan.linkedAccountId
+      ? accountsById[String(loan.linkedAccountId)]
+      : null;
+
+    return (
+      <div className="bg-card border rounded-xl p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-semibold">{loan.counterpartyName}</p>
+              <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium capitalize", STATUS_COLORS[loan.status] ?? STATUS_COLORS.active)}>
+                {loan.status.replace("_", " ")}
+              </span>
+              {loan.daysOverdue > 0 && (
+                <span className="text-xs text-red-500">Overdue {loan.daysOverdue}d</span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Issued: {loan.issuedDate}{loan.dueDate ? ` | Due: ${loan.dueDate}` : ""}
+              {loan.daysUntilDue !== null && loan.daysUntilDue >= 0 && loan.status !== "settled" &&
+                ` (${loan.daysUntilDue}d left)`}
+            </p>
+            {linkedAccount ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {loan.direction === "lent" ? "Sent from" : "Taken into"} {linkedAccount.name}
+              </p>
+            ) : null}
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-sm font-bold">{fmt(loan.currentBalance)}</p>
+            {loan.currentBalance < loan.principalAmount && (
+              <p className="text-xs text-muted-foreground">of {fmt(loan.principalAmount)}</p>
             )}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Issued: {loan.issuedDate}{loan.dueDate ? ` · Due: ${loan.dueDate}` : ""}
-            {loan.daysUntilDue !== null && loan.daysUntilDue >= 0 && loan.status !== "settled" &&
-              ` (${loan.daysUntilDue}d left)`}
-          </p>
         </div>
-        <div className="text-right shrink-0">
-          <p className="text-sm font-bold">{fmt(loan.currentBalance)}</p>
-          {loan.currentBalance < loan.principalAmount && (
-            <p className="text-xs text-muted-foreground">of {fmt(loan.principalAmount)}</p>
-          )}
-        </div>
-      </div>
-      {/* Progress */}
-      {loan.currentBalance < loan.principalAmount && (
-        <div className="mt-3">
-          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-500 rounded-full transition-all"
-              style={{ width: `${((loan.principalAmount - loan.currentBalance) / loan.principalAmount) * 100}%` }} />
+        {loan.notes ? (
+          <div className="mt-3 rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Notes
+            </p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground break-words whitespace-pre-wrap">
+              {loan.notes}
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {fmt(loan.principalAmount - loan.currentBalance)} repaid
-          </p>
-        </div>
-      )}
-      {loan.status !== "settled" && (
-        <div className="flex gap-2 mt-3">
-          <button onClick={() => { setRepayLoan(loan); setRepayForm({ ...repayForm, amount: loan.currentBalance.toString() }); }}
-            className="flex-1 text-xs text-primary border border-primary/30 rounded-lg py-1.5 hover:bg-primary/5 transition-colors">
-            Record Repayment
-          </button>
-          <button onClick={() => deleteLoan({ id: loan._id })}
-            className="p-1.5 border rounded-lg hover:bg-red-500/10 text-red-500 transition-colors">
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-    </div>
-  );
+        ) : null}
+
+        {/* Progress */}
+        {loan.currentBalance < loan.principalAmount && (
+          <div className="mt-3">
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-emerald-500 rounded-full transition-all"
+                style={{ width: `${((loan.principalAmount - loan.currentBalance) / loan.principalAmount) * 100}%` }} />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {fmt(loan.totalRepaid ?? loan.principalAmount - loan.currentBalance)} repaid
+            </p>
+          </div>
+        )}
+        {loan.repayments?.length ? (
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Repayment History
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {loan.repaymentCount} {loan.repaymentCount === 1 ? "entry" : "entries"}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {loan.repayments.map((repayment: any) => {
+                const repaymentAccount = repayment.accountId
+                  ? accountsById[String(repayment.accountId)]
+                  : null;
+
+                return (
+                  <div
+                    key={repayment._id}
+                    className="rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium">{repayment.date}</p>
+                        <p className="mt-1 text-[11px] leading-4 text-muted-foreground break-words">
+                          {repaymentDirectionLabel}: {repaymentAccount?.name ?? "No balance account"}
+                        </p>
+                      </div>
+                      <p className={cn("text-sm font-semibold", repaymentAmountClassName)}>
+                        {fmt(repayment.amount)}
+                      </p>
+                    </div>
+                    {repayment.notes ? (
+                      <p className="mt-2 text-xs leading-5 text-muted-foreground break-words whitespace-pre-wrap">
+                        {repayment.notes}
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {loan.status !== "settled" && (
+          <div className="flex gap-2 mt-3">
+            <button onClick={() => openRepaymentModal(loan)}
+              className="flex-1 text-xs text-primary border border-primary/30 rounded-lg py-1.5 hover:bg-primary/5 transition-colors">
+              Record Repayment
+            </button>
+            <button
+              onClick={() => {
+                if (
+                  !confirmDeleteRecord(
+                    "loan record",
+                    "Any repayment history linked to this loan will also be removed."
+                  )
+                ) {
+                  return;
+                }
+                void deleteLoan({ id: loan._id });
+              }}
+              className="p-1.5 border rounded-lg hover:bg-red-500/10 text-red-500 transition-colors">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+        {loan.status === "settled" ? (
+          <div className="mt-3 flex justify-end">
+            <button
+              onClick={() => {
+                if (
+                  !confirmDeleteRecord(
+                    "loan record",
+                    "Any repayment history linked to this loan will also be removed."
+                  )
+                ) {
+                  return;
+                }
+                void deleteLoan({ id: loan._id });
+              }}
+              className="p-1.5 border rounded-lg hover:bg-red-500/10 text-red-500 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -1230,7 +1363,7 @@ function LoansTab() {
           <Handshake className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
           <p className="text-sm text-muted-foreground">No loans tracked yet</p>
           <button onClick={() => setShowAdd(true)} className="mt-3 text-xs text-primary hover:underline">
-            Track a loan →
+            Track a loan {"->"}
           </button>
         </div>
       )}
@@ -1248,7 +1381,7 @@ function LoansTab() {
             <input value={form.counterpartyName} onChange={(e) => setForm({ ...form, counterpartyName: e.target.value })}
               placeholder="Person or organization name" className={inputCls} required />
           </Field>
-          <Field label="Amount (₹)" required>
+          <Field label="Amount (INR)" required>
             <input type="number" min="1" value={form.principalAmount}
               onChange={(e) => setForm({ ...form, principalAmount: e.target.value })}
               placeholder="0" className={inputCls} required />
@@ -1283,8 +1416,13 @@ function LoansTab() {
                 placeholder="0" className={inputCls} />
             </Field>
             <Field label="Notes">
-              <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="Optional" className={inputCls} />
+              <textarea
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                placeholder="Optional"
+                rows={3}
+                className={cn(inputCls, "resize-none py-3")}
+              />
             </Field>
           </div>
           <SaveBtn loading={saving} />
@@ -1299,8 +1437,8 @@ function LoansTab() {
               <p className="font-medium">{repayLoan.counterpartyName}</p>
               <p className="text-muted-foreground">Outstanding: {fmt(repayLoan.currentBalance)}</p>
             </div>
-            <Field label="Amount (₹)" required>
-              <input type="number" min="0.01" step="0.01" value={repayForm.amount}
+            <Field label="Amount (INR)" required>
+              <input type="number" min="0.01" step="0.01" max={repayLoan.currentBalance} value={repayForm.amount}
                 onChange={(e) => setRepayForm({ ...repayForm, amount: e.target.value })}
                 placeholder={repayLoan.currentBalance.toString()} className={inputCls} required />
             </Field>
@@ -1308,7 +1446,7 @@ function LoansTab() {
               <input type="date" value={repayForm.date}
                 onChange={(e) => setRepayForm({ ...repayForm, date: e.target.value })} className={inputCls} />
             </Field>
-            <Field label="Account">
+            <Field label={repayLoan.direction === "lent" ? "Repayment received in" : "Repayment paid from"}>
               <LedgerSelect
                 value={repayForm.accountId}
                 onValueChange={(value) => setRepayForm({ ...repayForm, accountId: value })}
@@ -1322,8 +1460,13 @@ function LoansTab() {
               </LedgerSelect>
             </Field>
             <Field label="Notes">
-              <input value={repayForm.notes} onChange={(e) => setRepayForm({ ...repayForm, notes: e.target.value })}
-                placeholder="Optional" className={inputCls} />
+              <textarea
+                value={repayForm.notes}
+                onChange={(e) => setRepayForm({ ...repayForm, notes: e.target.value })}
+                placeholder="Optional"
+                rows={3}
+                className={cn(inputCls, "resize-none py-3")}
+              />
             </Field>
             <SaveBtn loading={saving} label="Record Repayment" />
           </form>
@@ -1500,7 +1643,11 @@ function InvestmentsTab() {
                       <span className="text-xs font-normal ml-1">({inv.pnlPct >= 0 ? "+" : ""}{inv.pnlPct.toFixed(1)}%)</span>
                     </td>
                     <td className="px-2 py-3">
-                      <button onClick={() => deleteInv({ id: inv._id })}
+                      <button
+                        onClick={() => {
+                          if (!confirmDeleteRecord("investment")) return;
+                          void deleteInv({ id: inv._id });
+                        }}
                         className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/15 text-red-500 transition-all">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1724,7 +1871,11 @@ function BudgetTab() {
                       <span className={cn("text-sm font-bold", over ? "text-red-500" : "")}>{fmt(b.spent)}</span>
                       <span className="text-xs text-muted-foreground"> / {fmt(b.amount)}</span>
                     </div>
-                    <button onClick={() => deleteBudget({ id: b._id })}
+                    <button
+                      onClick={() => {
+                        if (!confirmDeleteRecord("budget")) return;
+                        void deleteBudget({ id: b._id });
+                      }}
                       className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/10 text-red-500 transition-all ml-1">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -1863,7 +2014,11 @@ function GoalsTab() {
                     <p className="text-sm font-bold">{fmt(g.currentAmount)}</p>
                     <p className="text-xs text-muted-foreground">of {fmt(g.targetAmount)}</p>
                   </div>
-                  <button onClick={() => deleteGoal({ id: g._id })}
+                  <button
+                    onClick={() => {
+                      if (!confirmDeleteRecord("goal")) return;
+                      void deleteGoal({ id: g._id });
+                    }}
                     className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/10 text-red-500 ml-1 transition-all">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -2037,7 +2192,11 @@ function RecurringTab() {
                     r.isActive ? "bg-emerald-500/15 text-emerald-600" : "bg-muted text-muted-foreground")}>
                   {r.isActive ? <CheckCircle className="w-3.5 h-3.5" /> : <RotateCcw className="w-3.5 h-3.5" />}
                 </button>
-                <button onClick={() => deleteRecurring({ id: r._id })}
+                <button
+                  onClick={() => {
+                    if (!confirmDeleteRecord("recurring transaction")) return;
+                    void deleteRecurring({ id: r._id });
+                  }}
                   className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/10 text-red-500 transition-all">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -2378,7 +2537,11 @@ function MarketTab() {
                     </div>
                     {ipo.notes && <p className="text-xs text-muted-foreground mt-1">{ipo.notes}</p>}
                   </div>
-                  <button onClick={() => deleteIPO({ id: ipo._id })}
+                  <button
+                    onClick={() => {
+                      if (!confirmDeleteRecord("IPO watchlist entry")) return;
+                      void deleteIPO({ id: ipo._id });
+                    }}
                     className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/10 text-red-500 transition-all">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -2401,7 +2564,11 @@ function MarketTab() {
                 </div>
                 <div className="flex items-center gap-3">
                   {ipo.priceBandMax && <span className="text-xs text-muted-foreground">Issue: ₹{ipo.priceBandMax}</span>}
-                  <button onClick={() => deleteIPO({ id: ipo._id })}
+                  <button
+                    onClick={() => {
+                      if (!confirmDeleteRecord("IPO watchlist entry")) return;
+                      void deleteIPO({ id: ipo._id });
+                    }}
                     className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/10 text-red-500 transition-all">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -2503,32 +2670,37 @@ export default function LedgerPage() {
 
   return (
     <div className="min-h-full bg-background">
-      <WorkspaceTopBar moduleTitle="Ledger" />
+      <div className="sticky top-0 z-30 isolate bg-background/95 backdrop-blur-md">
+        <WorkspaceTopBar
+          moduleTitle="Ledger"
+          sticky={false}
+          className="bg-transparent backdrop-blur-0"
+        />
 
-      {/* Tab bar */}
-      <div className="sticky top-[41px] z-10 bg-background/95 backdrop-blur border-b">
-        <div className="max-w-5xl mx-auto px-4 py-2">
-          <div className="flex gap-1 overflow-x-auto scrollbar-hide">
-            {TABS.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button key={tab.id} onClick={() => handleTabChange(tab.id)}
-                  className={cn(
-                    "shrink-0 flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg transition-all min-h-[36px]",
-                    ledgerTab === tab.id
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-muted"
-                  )}>
-                  <Icon className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">{tab.label}</span>
-                </button>
-              );
-            })}
+        <div className="border-b border-border/70">
+          <div className="max-w-5xl mx-auto px-4 py-2">
+            <div className="flex gap-1 overflow-x-auto overscroll-x-contain scrollbar-hide">
+              {TABS.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button key={tab.id} onClick={() => handleTabChange(tab.id)}
+                    className={cn(
+                      "shrink-0 flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg transition-all min-h-[36px]",
+                      ledgerTab === tab.id
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted"
+                    )}>
+                    <Icon className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-4 md:py-6">
+      <div className="max-w-5xl mx-auto px-4 py-4 pb-24 md:py-6 md:pb-6">
         {mounted["dashboard"] && <div className={ledgerTab !== "dashboard" ? "hidden" : ""}><DashboardTab /></div>}
         {mounted["transactions"] && <div className={ledgerTab !== "transactions" ? "hidden" : ""}><TransactionsTabV2 /></div>}
         {mounted["credit_cards"] && <div className={ledgerTab !== "credit_cards" ? "hidden" : ""}><CreditCardsTab /></div>}

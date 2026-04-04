@@ -432,6 +432,20 @@ export default defineSchema({
     .index("by_userId_status", ["userId", "status"])
     .index("by_linkedAccountId", ["linkedAccountId"]),
 
+  financeLoanRepayments: defineTable({
+    userId: v.string(),
+    loanId: v.id("financeLoans"),
+    amount: v.number(),
+    currency: v.string(),
+    date: v.string(),
+    accountId: v.optional(v.id("financeAccounts")),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_loanId", ["loanId"]),
+
   financeRecurring: defineTable({
     userId: v.string(),
     title: v.string(),

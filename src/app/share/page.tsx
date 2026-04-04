@@ -263,13 +263,13 @@ export default function ShareCapturePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(98,148,255,0.16),_transparent_38%),linear-gradient(180deg,_rgba(10,10,12,0.98),_rgba(7,7,9,1))] text-white">
-      <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-6 sm:px-6">
-        <div className="mb-6 flex items-center gap-3">
+    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top,_rgba(98,148,255,0.16),_transparent_38%),linear-gradient(180deg,_rgba(10,10,12,0.98),_rgba(7,7,9,1))] text-white">
+      <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-5 sm:px-6 sm:py-6">
+        <div className="mb-6 flex items-start gap-3 sm:items-center">
           <AppIcon className="h-11 w-11 rounded-3xl border border-white/10 bg-white/5 p-1.5" />
-          <div>
+          <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.22em] text-white/45">Android Share Target</p>
-            <h1 className="text-2xl font-semibold tracking-tight">Save into MadVibe</h1>
+            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Save into MadVibe</h1>
           </div>
         </div>
 
@@ -282,12 +282,12 @@ export default function ShareCapturePage() {
           </div>
         ) : !isAuthenticated ? (
           <div className="flex flex-1 items-center justify-center">
-            <div className="w-full max-w-md rounded-[28px] border border-white/10 bg-white/[0.05] p-6 shadow-[0_32px_80px_rgba(0,0,0,0.35)]">
+            <div className="w-full max-w-md rounded-[28px] border border-white/10 bg-white/[0.05] p-5 shadow-[0_32px_80px_rgba(0,0,0,0.35)] sm:p-6">
               <div className="mb-4 flex items-center gap-3">
                 <div className="rounded-2xl bg-white/10 p-3">
                   <LogIn className="h-5 w-5" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <h2 className="text-lg font-semibold">Sign in to finish saving</h2>
                   <p className="text-sm text-white/60">We will bring this shared link back after login.</p>
                 </div>
@@ -305,12 +305,12 @@ export default function ShareCapturePage() {
             </div>
           </div>
         ) : (
-          <div className="grid flex-1 gap-5 lg:grid-cols-[1.12fr_0.88fr]">
-            <section className="rounded-[30px] border border-white/10 bg-white/[0.05] p-5 shadow-[0_32px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-              <div className="mb-4 flex items-start justify-between gap-4">
-                <div>
+          <div className="grid flex-1 gap-4 sm:gap-5 lg:grid-cols-[1.12fr_0.88fr]">
+            <section className="overflow-hidden rounded-[26px] border border-white/10 bg-white/[0.05] p-4 shadow-[0_32px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:rounded-[30px] sm:p-5">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                <div className="min-w-0">
                   <p className="text-xs uppercase tracking-[0.18em] text-cyan-200/65">Incoming Share</p>
-                  <h2 className="mt-1 text-xl font-semibold leading-tight">
+                  <h2 className="mt-1 break-words text-lg font-semibold leading-tight sm:text-xl">
                     {getShareHeadline(sharePayload)}
                   </h2>
                 </div>
@@ -319,7 +319,7 @@ export default function ShareCapturePage() {
                     href={sharePayload.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-white/70 transition hover:bg-white/[0.08]"
+                    className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-2 text-xs text-white/70 transition hover:bg-white/[0.08] sm:w-auto sm:justify-start sm:py-1.5"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
                     Open source
@@ -327,12 +327,12 @@ export default function ShareCapturePage() {
                 ) : null}
               </div>
 
-              <div className="rounded-[26px] border border-cyan-300/15 bg-[linear-gradient(180deg,rgba(84,163,255,0.12),rgba(255,255,255,0.03))] p-4">
+              <div className="rounded-[24px] border border-cyan-300/15 bg-[linear-gradient(180deg,rgba(84,163,255,0.12),rgba(255,255,255,0.03))] p-4 sm:rounded-[26px]">
                 <div className="mb-3 flex items-center gap-2 text-sm text-cyan-100/85">
                   <Link2 className="h-4 w-4" />
-                  {sharePayload.host || "Shared content"}
+                  <span className="break-words">{sharePayload.host || "Shared content"}</span>
                 </div>
-                <p className="text-sm leading-6 text-white/88">
+                <p className="break-words text-sm leading-6 text-white/88">
                   {sharePayload.note || sharePayload.text || "MadVibe is ready to save this share into a checklist item."}
                 </p>
                 {sharePayload.url ? (
@@ -357,7 +357,7 @@ export default function ShareCapturePage() {
                     You do not have any editable workspaces yet. Open MadVibe and create or join one first.
                   </div>
                 ) : (
-                  <div className="flex gap-2 overflow-x-auto pb-1">
+                  <div className="grid gap-2 sm:flex sm:gap-2 sm:overflow-x-auto sm:pb-1">
                     {editableWorkspaces.map((workspace) => (
                       <button
                         key={workspace._id}
@@ -367,16 +367,16 @@ export default function ShareCapturePage() {
                           setSearch("");
                         }}
                         className={cn(
-                          "min-w-[180px] rounded-2xl border px-4 py-3 text-left transition",
+                          "w-full rounded-2xl border px-4 py-3 text-left transition sm:min-w-[180px] sm:w-auto",
                           workspace._id === selectedWorkspaceId
                             ? "border-cyan-300/40 bg-cyan-400/12"
                             : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
                         )}
                       >
-                        <div className="text-sm font-semibold text-white">{workspace.name}</div>
-                        <div className="mt-1 text-xs text-white/55">
+                        <div className="break-words text-sm font-semibold text-white">{workspace.name}</div>
+                        <div className="mt-1 break-words text-xs text-white/55">
                           {workspace.role === "owner" ? "Owner access" : "Editor access"}
-                          {workspace.memberCount ? ` · ${workspace.memberCount} members` : ""}
+                          {workspace.memberCount ? ` | ${workspace.memberCount} members` : ""}
                         </div>
                       </button>
                     ))}
@@ -385,13 +385,13 @@ export default function ShareCapturePage() {
               </div>
             </section>
 
-            <section className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_32px_80px_rgba(0,0,0,0.24)] backdrop-blur-xl">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
+            <section className="overflow-hidden rounded-[26px] border border-white/10 bg-white/[0.04] p-4 shadow-[0_32px_80px_rgba(0,0,0,0.24)] backdrop-blur-xl sm:rounded-[30px] sm:p-5">
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <div className="min-w-0">
                   <p className="text-xs uppercase tracking-[0.18em] text-white/42">Checklist Destination</p>
-                  <h2 className="mt-1 text-xl font-semibold">Pick the page</h2>
+                  <h2 className="mt-1 text-lg font-semibold sm:text-xl">Pick the page</h2>
                 </div>
-                <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/60">
+                <div className="max-w-full break-words rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/60 sm:rounded-full sm:py-1.5">
                   {selectedWorkspace?.name ?? "No workspace selected"}
                 </div>
               </div>
@@ -432,14 +432,14 @@ export default function ShareCapturePage() {
                       >
                         <div
                           className={cn(
-                            "rounded-2xl p-2.5",
+                            "shrink-0 rounded-2xl p-2.5",
                             isActive ? "bg-emerald-300/15 text-emerald-100" : "bg-white/8 text-white/70"
                           )}
                         >
                           <Icon className="h-4 w-4" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-white">
+                          <div className="break-words text-sm font-medium leading-5 text-white">
                             {page.title || "Untitled"}
                           </div>
                           <div className="mt-1 text-xs text-white/50">
@@ -457,7 +457,7 @@ export default function ShareCapturePage() {
                 <p className="text-sm text-white/72">
                   MadVibe will append one unchecked checklist item to the selected page with the shared link embedded as text.
                 </p>
-                <div className="mt-4 flex gap-3">
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                   <Button
                     onClick={handleSave}
                     disabled={
@@ -467,7 +467,7 @@ export default function ShareCapturePage() {
                       !editableWorkspaces.length ||
                       !hasIncomingShare
                     }
-                    className="flex-1 rounded-2xl bg-emerald-500 text-black hover:bg-emerald-400"
+                    className="w-full rounded-2xl bg-emerald-500 text-black hover:bg-emerald-400 sm:flex-1"
                   >
                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Save checklist item
@@ -476,13 +476,13 @@ export default function ShareCapturePage() {
                     type="button"
                     variant="outline"
                     onClick={handleOpenWorkspace}
-                    className="rounded-2xl border-white/12 bg-white/[0.03] text-white hover:bg-white/[0.06]"
+                    className="w-full rounded-2xl border-white/12 bg-white/[0.03] text-white hover:bg-white/[0.06] sm:w-auto"
                   >
                     Open app
                   </Button>
                 </div>
                 {selectedPage ? (
-                  <p className="mt-3 text-xs text-white/45">
+                  <p className="mt-3 break-words text-xs text-white/45">
                     Saving into <span className="text-white/72">{selectedPage.title || "Untitled"}</span>
                   </p>
                 ) : null}
