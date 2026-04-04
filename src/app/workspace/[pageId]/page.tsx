@@ -42,6 +42,17 @@ export default function PagePage() {
   // Track page id for scroll-to-top
   const prevPageId = useRef<string>(pageId);
 
+  const scrollToPageTop = () => {
+    const scrollContainer = scrollRef.current?.closest("main");
+
+    if (scrollContainer instanceof HTMLElement) {
+      scrollContainer.scrollTo({ top: 0 });
+      return;
+    }
+
+    window.scrollTo({ top: 0 });
+  };
+
   useEffect(() => {
     if (pageId) {
       addRecentPage(pageId);
@@ -49,7 +60,7 @@ export default function PagePage() {
     // Scroll to top when navigating to a different page
     if (prevPageId.current !== pageId) {
       prevPageId.current = pageId;
-      scrollRef.current?.scrollTo({ top: 0 });
+      scrollToPageTop();
     }
   }, [addRecentPage, pageId]);
 
@@ -66,7 +77,7 @@ export default function PagePage() {
   // First load — nothing to show yet
   if (displayPage === undefined) {
     return (
-      <div ref={scrollRef} className="min-h-full overflow-auto">
+      <div ref={scrollRef} className="min-h-full">
         <PageSkeleton />
       </div>
     );
@@ -87,7 +98,7 @@ export default function PagePage() {
   // During route transition show skeleton on top of old content
   if (isTransitioning) {
     return (
-      <div ref={scrollRef} className="min-h-full overflow-auto">
+      <div ref={scrollRef} className="min-h-full">
         <div className="pointer-events-none fixed inset-x-0 top-0 z-40 h-0.5 bg-gradient-to-r from-transparent via-primary/60 to-transparent animate-slide-in" />
         <PageSkeleton />
       </div>
@@ -95,7 +106,7 @@ export default function PagePage() {
   }
 
   return (
-    <div ref={scrollRef} className="min-h-full overflow-auto">
+    <div ref={scrollRef} className="min-h-full">
       {displayPage.type === "database" ? (
         <DatabaseView page={displayPage} />
       ) : (
