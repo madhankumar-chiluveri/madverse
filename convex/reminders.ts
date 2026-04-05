@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireWorkspaceAccess } from "./workspaceAccess";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 
 async function requireUserId(ctx: any) {
   const userId = await getAuthUserId(ctx);
@@ -99,7 +100,7 @@ export const create = mutation({
     sourceLabel: v.optional(v.string()),
     sourceUrl: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<Id<"reminders">> => {
     const userId = await requireUserId(ctx);
     await requireWorkspaceAccess(ctx, args.workspaceId, "viewer");
     const now = Date.now();
@@ -143,7 +144,7 @@ export const update = mutation({
     sourceLabel: v.optional(v.string()),
     sourceUrl: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<void> => {
     const userId = await requireUserId(ctx);
     const reminder = await ctx.db.get(args.id);
     if (!reminder || reminder.userId !== userId) throw new Error("Reminder not found");
@@ -186,7 +187,7 @@ export const setCompleted = mutation({
     id: v.id("reminders"),
     completed: v.boolean(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<void> => {
     const userId = await requireUserId(ctx);
     const reminder = await ctx.db.get(args.id);
     if (!reminder || reminder.userId !== userId) throw new Error("Reminder not found");
@@ -210,7 +211,7 @@ export const snooze = mutation({
     id: v.id("reminders"),
     remindAt: v.number(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<void> => {
     const userId = await requireUserId(ctx);
     const reminder = await ctx.db.get(args.id);
     if (!reminder || reminder.userId !== userId) throw new Error("Reminder not found");
@@ -239,7 +240,7 @@ export const snooze = mutation({
 
 export const markNotified = mutation({
   args: { id: v.id("reminders") },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<void> => {
     const userId = await requireUserId(ctx);
     const reminder = await ctx.db.get(args.id);
     if (!reminder || reminder.userId !== userId) throw new Error("Reminder not found");
@@ -253,7 +254,7 @@ export const markNotified = mutation({
 
 export const remove = mutation({
   args: { id: v.id("reminders") },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<void> => {
     const userId = await requireUserId(ctx);
     const reminder = await ctx.db.get(args.id);
     if (!reminder || reminder.userId !== userId) throw new Error("Reminder not found");
